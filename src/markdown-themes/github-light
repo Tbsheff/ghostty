@@ -1,0 +1,18 @@
+# GitHub Light Markdown Theme
+# Inspired by GitHub's light mode markdown rendering
+
+markdown-background = FFFFFF
+markdown-surface = F6F8FA
+markdown-code-background = EFF1F3
+markdown-text-primary = 1F2328
+markdown-text-secondary = 656D76
+markdown-text-muted = 8C959F
+markdown-accent = 0969DA
+markdown-success = 1A7F37
+markdown-border = D0D7DE
+markdown-syntax-keyword = CF222E
+markdown-syntax-string = 0A3069
+markdown-syntax-comment = 6E7781
+markdown-syntax-number = 0550AE
+markdown-syntax-type = 953800
+markdown-syntax-function = 8250DF

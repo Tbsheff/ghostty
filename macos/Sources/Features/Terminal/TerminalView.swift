@@ -87,7 +87,7 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
         case .error:
             ErrorView()
         case .ready:
-            TerminalWithPanelView(panelState: viewModel.markdownPanelState) {
+            TerminalWithPanelView(panelState: viewModel.markdownPanelState, config: ghostty.config) {
                 ZStack {
                     VStack(spacing: 0) {
                         // If we're running in debug mode we show a warning so that users

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import GhosttyKit
 
 // MARK: - Vibrancy Background
 
@@ -34,6 +35,7 @@ struct NativeMarkdownHeader: View {
     var isSearchFocused: FocusState<Bool>.Binding
     let onClose: () -> Void
     let onRefresh: () -> Void
+    var config: Ghostty.Config? = nil  // Ghostty config for theme customization
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var closeHovered = false
@@ -42,7 +44,7 @@ struct NativeMarkdownHeader: View {
     @State private var outlineHovered = false
 
     private var theme: MarkdownTheme {
-        MarkdownTheme(colorScheme: colorScheme)
+        MarkdownTheme(colorScheme: colorScheme, config: config)
     }
 
     private var breadcrumbs: [String] {
@@ -263,6 +265,7 @@ struct NativeMarkdownPanelView: View {
     let onClose: () -> Void
     let onRefresh: () -> Void
     var onExecuteCode: ((String) -> Void)?
+    var config: Ghostty.Config? = nil  // Ghostty config for theme customization
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -280,7 +283,7 @@ struct NativeMarkdownPanelView: View {
     @State private var lastContent: String = ""
 
     private var theme: MarkdownTheme {
-        MarkdownTheme(colorScheme: colorScheme)
+        MarkdownTheme(colorScheme: colorScheme, config: config)
     }
 
     /// Check if file is being watched for live reload
@@ -298,7 +301,8 @@ struct NativeMarkdownPanelView: View {
                 showOutline: $showOutline,
                 isSearchFocused: $isSearchFocused,
                 onClose: onClose,
-                onRefresh: onRefresh
+                onRefresh: onRefresh,
+                config: config
             )
 
             if content.isEmpty {
@@ -311,7 +315,8 @@ struct NativeMarkdownPanelView: View {
                     scrollTarget: $scrollTarget,
                     onExecuteCode: onExecuteCode,
                     onClose: onClose,
-                    basePath: basePath
+                    basePath: basePath,
+                    config: config
                 )
                 .environment(\.searchQuery, searchQuery)
             }

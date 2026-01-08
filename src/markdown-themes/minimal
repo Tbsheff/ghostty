@@ -1,0 +1,18 @@
+# Minimal Markdown Theme
+# Clean, distraction-free writing inspired by iA Writer
+
+markdown-background = F9F9F9
+markdown-surface = FFFFFF
+markdown-code-background = F2F2F2
+markdown-text-primary = 1A1A1A
+markdown-text-secondary = 5C5C5C
+markdown-text-muted = 8A8A8A
+markdown-accent = 2D7FF9
+markdown-success = 20A464
+markdown-border = E6E6E6
+markdown-syntax-keyword = 5C5C5C
+markdown-syntax-string = 1A1A1A
+markdown-syntax-comment = 8A8A8A
+markdown-syntax-number = 5C5C5C
+markdown-syntax-type = 5C5C5C
+markdown-syntax-function = 1A1A1A

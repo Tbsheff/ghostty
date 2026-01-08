@@ -643,6 +643,108 @@ extension Ghostty {
             let buffer = UnsafeBufferPointer(start: v.commands, count: v.len)
             return buffer.map { Ghostty.Command(cValue: $0) }
         }
+
+        // MARK: - Markdown Configuration
+
+        /// Markdown preview theme name
+        var markdownTheme: String? {
+            guard let config = self.config else { return nil }
+            var v: UnsafePointer<Int8>? = nil
+            let key = "markdown-theme"
+            guard ghostty_config_get(config, &v, key, UInt(key.lengthOfBytes(using: .utf8))) else { return nil }
+            guard let ptr = v else { return nil }
+            return String(cString: ptr)
+        }
+
+        /// Markdown font size
+        var markdownFontSize: CGFloat {
+            guard let config = self.config else { return 15 }
+            var v: Float = 15
+            let key = "markdown-font-size"
+            _ = ghostty_config_get(config, &v, key, UInt(key.lengthOfBytes(using: .utf8)))
+            return CGFloat(v)
+        }
+
+        /// Markdown code font size
+        var markdownCodeFontSize: CGFloat {
+            guard let config = self.config else { return 13 }
+            var v: Float = 13
+            let key = "markdown-code-font-size"
+            _ = ghostty_config_get(config, &v, key, UInt(key.lengthOfBytes(using: .utf8)))
+            return CGFloat(v)
+        }
+
+        /// Markdown line height multiplier
+        var markdownLineHeight: CGFloat {
+            guard let config = self.config else { return 1.4 }
+            var v: Float = 1.4
+            let key = "markdown-line-height"
+            _ = ghostty_config_get(config, &v, key, UInt(key.lengthOfBytes(using: .utf8)))
+            return CGFloat(v)
+        }
+
+        /// Markdown code theme name
+        var markdownCodeTheme: String? {
+            guard let config = self.config else { return nil }
+            var v: UnsafePointer<Int8>? = nil
+            let key = "markdown-code-theme"
+            guard ghostty_config_get(config, &v, key, UInt(key.lengthOfBytes(using: .utf8))) else { return nil }
+            guard let ptr = v else { return nil }
+            return String(cString: ptr)
+        }
+
+        // MARK: - Terminal Colors for Markdown Theme
+
+        /// Get the terminal foreground color from config
+        var terminalForeground: Color? {
+            guard let config = self.config else { return nil }
+            var color: ghostty_config_color_s = .init()
+            let key = "foreground"
+            guard ghostty_config_get(config, &color, key, UInt(key.lengthOfBytes(using: .utf8))) else { return nil }
+            return Color(
+                red: Double(color.r) / 255,
+                green: Double(color.g) / 255,
+                blue: Double(color.b) / 255
+            )
+        }
+
+        /// Get the terminal background color from config (same as backgroundColor but returns optional)
+        var terminalBackground: Color? {
+            guard let config = self.config else { return nil }
+            var color: ghostty_config_color_s = .init()
+            let key = "background"
+            guard ghostty_config_get(config, &color, key, UInt(key.lengthOfBytes(using: .utf8))) else { return nil }
+            return Color(
+                red: Double(color.r) / 255,
+                green: Double(color.g) / 255,
+                blue: Double(color.b) / 255
+            )
+        }
+
+        /// Get the full terminal color palette (256 colors)
+        private var terminalPalette: ghostty_config_palette_s? {
+            guard let config = self.config else { return nil }
+            var palette: ghostty_config_palette_s = .init()
+            let key = "palette"
+            guard ghostty_config_get(config, &palette, key, UInt(key.lengthOfBytes(using: .utf8))) else { return nil }
+            return palette
+        }
+
+        /// Get a color from the terminal palette (0-255)
+        func paletteColor(_ index: Int) -> Color? {
+            guard index >= 0 && index < 256 else { return nil }
+            guard let palette = terminalPalette else { return nil }
+            // Access the color array using withUnsafePointer for the tuple
+            return withUnsafePointer(to: palette.colors) { ptr in
+                let colorPtr = UnsafeRawPointer(ptr).assumingMemoryBound(to: ghostty_config_color_s.self)
+                let color = colorPtr[index]
+                return Color(
+                    red: Double(color.r) / 255,
+                    green: Double(color.g) / 255,
+                    blue: Double(color.b) / 255
+                )
+            }
+        }
     }
 }
 

@@ -2940,6 +2940,41 @@ keybind: Keybinds = .{},
 /// Available since: 1.1.0
 @"app-notifications": AppNotifications = .{},
 
+/// Theme for the markdown preview panel. Can be a preset name (ghostty,
+/// github, minimal, terminal) or a path to a custom theme file. The special
+/// value "terminal" inherits colors from your terminal theme.
+///
+/// This is used when displaying markdown content in split panels or
+/// previews within Ghostty.
+@"markdown-theme": ?[:0]const u8 = null,
+
+/// Base font size in points for markdown preview body text. This controls
+/// the size of regular paragraph text in markdown panels.
+@"markdown-font-size": f32 = 15,
+
+/// Font size in points for code blocks in markdown preview. This is
+/// typically smaller than the body font size to fit more code on screen.
+@"markdown-code-font-size": f32 = 13,
+
+/// Line height multiplier for markdown body text. A value of 1.0 means
+/// single spacing, 1.5 means 150% line height, etc. Higher values improve
+/// readability for longer documents.
+@"markdown-line-height": f32 = 1.4,
+
+/// Syntax highlighting theme for code blocks in markdown preview. The
+/// "auto" value selects a theme based on your terminal's color scheme.
+/// The "terminal" value uses your terminal colors for syntax highlighting.
+///
+/// Valid values are:
+///   * `auto` - Automatically select based on terminal theme
+///   * `monokai` - Monokai color scheme
+///   * `dracula` - Dracula color scheme
+///   * `nord` - Nord color scheme
+///   * `github` - GitHub color scheme
+///   * `one-dark` - One Dark color scheme
+///   * `terminal` - Use terminal colors
+@"markdown-code-theme": MarkdownCodeTheme = .auto,
+
 /// If anything other than false, fullscreen mode on macOS will not use the
 /// native fullscreen, but make the window fullscreen without animations and
 /// using a new space. It's faster than the native fullscreen mode since it
@@ -8480,6 +8515,17 @@ pub const BellFeatures = packed struct {
     attention: bool = true,
     title: bool = true,
     border: bool = false,
+};
+
+/// See markdown-code-theme
+pub const MarkdownCodeTheme = enum {
+    auto,
+    monokai,
+    dracula,
+    nord,
+    github,
+    @"one-dark",
+    terminal,
 };
 
 /// See mouse-shift-capture

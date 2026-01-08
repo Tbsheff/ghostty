@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import GhosttyKit
 
 // MARK: - Search Environment Key
 
@@ -651,11 +652,12 @@ struct NativeMarkdownView: View {
     var onExecuteCode: ((String) -> Void)?
     var onClose: (() -> Void)? = nil
     var basePath: String? = nil  // Directory containing the markdown file for relative paths
+    var config: Ghostty.Config? = nil  // Ghostty config for theme customization
 
     @Environment(\.colorScheme) private var colorScheme
 
     private var theme: MarkdownTheme {
-        MarkdownTheme(colorScheme: colorScheme)
+        MarkdownTheme(colorScheme: colorScheme, config: config)
     }
 
     var body: some View {
@@ -767,9 +769,9 @@ struct ParagraphView: View {
 
     var body: some View {
         InlineContentView(content: content, theme: theme)
-            .font(.system(size: 15))
+            .font(.system(size: theme.fontSize))
             .foregroundColor(theme.textPrimary)
-            .lineSpacing(6)
+            .lineSpacing(theme.fontSize * (theme.lineHeight - 1))
             .padding(.bottom, 16)
     }
 }
@@ -900,10 +902,10 @@ struct UnorderedListView: View {
                     Circle()
                         .fill(theme.accent)
                         .frame(width: 6, height: 6)
-                        .padding(.top, 7)
+                        .padding(.top, theme.fontSize * 0.47)
 
                     InlineContentView(content: item, theme: theme)
-                        .font(.system(size: 15))
+                        .font(.system(size: theme.fontSize))
                         .foregroundColor(theme.textPrimary)
                 }
             }
@@ -921,12 +923,12 @@ struct OrderedListView: View {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 HStack(alignment: .top, spacing: 8) {
                     Text("\(index + 1).")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: theme.fontSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .frame(width: 24, alignment: .trailing)
 
                     InlineContentView(content: item, theme: theme)
-                        .font(.system(size: 15))
+                        .font(.system(size: theme.fontSize))
                         .foregroundColor(theme.textPrimary)
                 }
             }
@@ -944,12 +946,12 @@ struct TaskListView: View {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: item.checked ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 14))
+                        .font(.system(size: theme.fontSize - 1))
                         .foregroundColor(item.checked ? theme.success : theme.textMuted)
                         .padding(.top, 2)
 
                     InlineContentView(content: item.content, theme: theme)
-                        .font(.system(size: 15))
+                        .font(.system(size: theme.fontSize))
                         .foregroundColor(item.checked ? theme.textSecondary : theme.textPrimary)
                         .strikethrough(item.checked, color: theme.textMuted)
                 }
@@ -1211,7 +1213,7 @@ struct InlineContentView: View {
             return highlightedText(text, modifier: { $0.bold().italic() })
         case .code(let text):
             return highlightedText(text, modifier: {
-                $0.font(.system(size: 13, design: .monospaced))
+                $0.font(.system(size: theme.codeFontSize, design: .monospaced))
                     .foregroundColor(theme.accent)
             })
         case .link(let text, let url):
@@ -1349,106 +1351,257 @@ struct InlineContentView: View {
 
 struct MarkdownTheme {
     let colorScheme: ColorScheme
+    let config: Ghostty.Config?
 
-    // MARK: - Backgrounds
-    var background: Color {
+    init(colorScheme: ColorScheme, config: Ghostty.Config? = nil) {
+        self.colorScheme = colorScheme
+        self.config = config
+    }
+
+    /// Whether to use terminal colors (when markdown-theme = "terminal")
+    private var useTerminalColors: Bool {
+        config?.markdownTheme == "terminal"
+    }
+
+    // MARK: - Font Sizes (configurable via Ghostty config)
+    var fontSize: CGFloat {
+        config?.markdownFontSize ?? 15
+    }
+
+    var codeFontSize: CGFloat {
+        config?.markdownCodeFontSize ?? 13
+    }
+
+    var lineHeight: CGFloat {
+        config?.markdownLineHeight ?? 1.4
+    }
+
+    // MARK: - Default Colors (fallback when not using terminal theme)
+
+    private var defaultBackground: Color {
         colorScheme == .dark
             ? Color(hex: "1C1C1E")
             : Color(hex: "FFFFFF")
     }
 
-    var surfaceElevated: Color {
-        colorScheme == .dark
-            ? Color(hex: "2C2C2E")
-            : Color(hex: "F5F5F7")
-    }
-
-    var codeBackground: Color {
-        colorScheme == .dark
-            ? Color(hex: "1E1E20")
-            : Color(hex: "F6F8FA")
-    }
-
-    // MARK: - Text
-    var textPrimary: Color {
+    private var defaultTextPrimary: Color {
         colorScheme == .dark
             ? Color(hex: "E5E5E7")
             : Color(hex: "1D1D1F")
     }
 
-    var textSecondary: Color {
+    private var defaultTextSecondary: Color {
         colorScheme == .dark
             ? Color(hex: "A1A1A6")
             : Color(hex: "6E6E73")
     }
 
-    var textMuted: Color {
+    private var defaultTextMuted: Color {
         colorScheme == .dark
             ? Color(hex: "636366")
             : Color(hex: "8E8E93")
     }
 
-    // MARK: - Accent & UI
-    var accent: Color {
+    private var defaultAccent: Color {
         colorScheme == .dark
             ? Color(hex: "0A84FF")
             : Color(hex: "007AFF")
     }
 
-    var success: Color {
+    private var defaultSuccess: Color {
         colorScheme == .dark
             ? Color(hex: "30D158")
             : Color(hex: "34C759")
     }
 
-    var border: Color {
+    private var defaultCodeBackground: Color {
         colorScheme == .dark
-            ? Color(hex: "38383A")
-            : Color(hex: "D1D1D6")
+            ? Color(hex: "1E1E20")
+            : Color(hex: "F6F8FA")
     }
 
-    // MARK: - Search
-    var searchHighlight: Color {
-        colorScheme == .dark
-            ? Color(hex: "FFD60A").opacity(0.4)  // Yellow highlight for dark mode
-            : Color(hex: "FFD60A").opacity(0.5)  // Yellow highlight for light mode
-    }
-
-    // MARK: - Syntax Highlighting Colors
-    var syntaxKeyword: Color {
+    private var defaultSyntaxKeyword: Color {
         colorScheme == .dark
             ? Color(hex: "FF79C6")  // Pink
             : Color(hex: "D73A49")  // Red
     }
 
-    var syntaxString: Color {
+    private var defaultSyntaxString: Color {
         colorScheme == .dark
             ? Color(hex: "F1FA8C")  // Yellow
             : Color(hex: "22863A")  // Green
     }
 
-    var syntaxComment: Color {
+    private var defaultSyntaxComment: Color {
         colorScheme == .dark
             ? Color(hex: "6272A4")  // Muted blue
             : Color(hex: "6A737D")  // Gray
     }
 
+    // MARK: - Backgrounds
+
+    /// Background color - uses terminal background when theme is "terminal"
+    var background: Color {
+        if useTerminalColors, let termBg = config?.terminalBackground {
+            return termBg
+        }
+        return defaultBackground
+    }
+
+    var surfaceElevated: Color {
+        if useTerminalColors, let termBg = config?.terminalBackground {
+            return termBg.adjustBrightness(by: colorScheme == .dark ? 0.05 : -0.03)
+        }
+        return colorScheme == .dark
+            ? Color(hex: "2C2C2E")
+            : Color(hex: "F5F5F7")
+    }
+
+    /// Code background - slightly darker than background when using terminal theme
+    var codeBackground: Color {
+        if useTerminalColors, let termBg = config?.terminalBackground {
+            return termBg.adjustBrightness(by: colorScheme == .dark ? -0.02 : -0.03)
+        }
+        return defaultCodeBackground
+    }
+
+    // MARK: - Text
+
+    /// Primary text - uses terminal foreground when theme is "terminal"
+    var textPrimary: Color {
+        if useTerminalColors, let termFg = config?.terminalForeground {
+            return termFg
+        }
+        return defaultTextPrimary
+    }
+
+    /// Secondary text - uses palette[8] (bright black) when theme is "terminal"
+    var textSecondary: Color {
+        if useTerminalColors, let palette8 = config?.paletteColor(8) {
+            return palette8
+        }
+        return defaultTextSecondary
+    }
+
+    /// Muted text - uses palette[8] with reduced opacity when theme is "terminal"
+    var textMuted: Color {
+        if useTerminalColors, let palette8 = config?.paletteColor(8) {
+            return palette8.opacity(0.8)
+        }
+        return defaultTextMuted
+    }
+
+    // MARK: - Accent & UI
+
+    /// Accent/links - uses palette[4] (blue) when theme is "terminal"
+    var accent: Color {
+        if useTerminalColors, let palette4 = config?.paletteColor(4) {
+            return palette4
+        }
+        return defaultAccent
+    }
+
+    /// Success color - uses palette[2] (green) when theme is "terminal"
+    var success: Color {
+        if useTerminalColors, let palette2 = config?.paletteColor(2) {
+            return palette2
+        }
+        return defaultSuccess
+    }
+
+    var border: Color {
+        if useTerminalColors, let termFg = config?.terminalForeground {
+            return termFg.opacity(0.2)
+        }
+        return colorScheme == .dark
+            ? Color(hex: "38383A")
+            : Color(hex: "D1D1D6")
+    }
+
+    // MARK: - Search
+
+    var searchHighlight: Color {
+        if useTerminalColors, let palette3 = config?.paletteColor(3) {
+            return palette3.opacity(0.4)
+        }
+        return colorScheme == .dark
+            ? Color(hex: "FFD60A").opacity(0.4)
+            : Color(hex: "FFD60A").opacity(0.5)
+    }
+
+    // MARK: - Syntax Highlighting Colors
+
+    /// Syntax keyword - uses palette[5] (magenta) when theme is "terminal"
+    var syntaxKeyword: Color {
+        if useTerminalColors, let palette5 = config?.paletteColor(5) {
+            return palette5
+        }
+        return defaultSyntaxKeyword
+    }
+
+    /// Syntax string - uses palette[3] (yellow) when theme is "terminal"
+    var syntaxString: Color {
+        if useTerminalColors, let palette3 = config?.paletteColor(3) {
+            return palette3
+        }
+        return defaultSyntaxString
+    }
+
+    /// Syntax comment - uses palette[8] (bright black) when theme is "terminal"
+    var syntaxComment: Color {
+        if useTerminalColors, let palette8 = config?.paletteColor(8) {
+            return palette8
+        }
+        return defaultSyntaxComment
+    }
+
     var syntaxNumber: Color {
-        colorScheme == .dark
-            ? Color(hex: "BD93F9")  // Purple
-            : Color(hex: "005CC5")  // Blue
+        if useTerminalColors, let palette6 = config?.paletteColor(6) {
+            return palette6
+        }
+        return colorScheme == .dark
+            ? Color(hex: "BD93F9")
+            : Color(hex: "005CC5")
     }
 
     var syntaxType: Color {
-        colorScheme == .dark
-            ? Color(hex: "8BE9FD")  // Cyan
-            : Color(hex: "6F42C1")  // Purple
+        if useTerminalColors, let palette6 = config?.paletteColor(6) {
+            return palette6
+        }
+        return colorScheme == .dark
+            ? Color(hex: "8BE9FD")
+            : Color(hex: "6F42C1")
     }
 
     var syntaxFunction: Color {
-        colorScheme == .dark
-            ? Color(hex: "50FA7B")  // Green
-            : Color(hex: "6F42C1")  // Purple
+        if useTerminalColors, let palette2 = config?.paletteColor(2) {
+            return palette2
+        }
+        return colorScheme == .dark
+            ? Color(hex: "50FA7B")
+            : Color(hex: "6F42C1")
+    }
+}
+
+// MARK: - Color Brightness Extension
+
+extension Color {
+    /// Adjust the brightness of a color by a percentage (-1.0 to 1.0)
+    func adjustBrightness(by amount: Double) -> Color {
+        let nsColor = NSColor(self)
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+
+        if let calibratedColor = nsColor.usingColorSpace(.deviceRGB) {
+            calibratedColor.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        } else {
+            return self
+        }
+
+        let newBrightness = max(0, min(1, brightness + CGFloat(amount)))
+        return Color(NSColor(hue: hue, saturation: saturation, brightness: newBrightness, alpha: alpha))
     }
 }
 
@@ -1557,8 +1710,8 @@ struct SyntaxHighlighter {
         var attrStr = AttributedString(code)
         let fullRange = NSRange(location: 0, length: (code as NSString).length)
 
-        // Base style
-        attrStr.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
+        // Base style - use configurable code font size
+        attrStr.font = .monospacedSystemFont(ofSize: theme.codeFontSize, weight: .regular)
         attrStr.foregroundColor = NSColor(theme.textPrimary)
 
         let lang = Language.from(language)
@@ -1581,7 +1734,7 @@ struct SyntaxHighlighter {
                     let attrRange = startIndex..<endIndex
                     attrStr[attrRange].foregroundColor = NSColor(color)
                     if bold {
-                        attrStr[attrRange].font = .monospacedSystemFont(ofSize: 13, weight: .bold)
+                        attrStr[attrRange].font = .monospacedSystemFont(ofSize: theme.codeFontSize, weight: .bold)
                     }
                     highlighted.append(range)
                 }

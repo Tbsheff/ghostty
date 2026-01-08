@@ -1,0 +1,18 @@
+# Obsidian Markdown Theme
+# Warm, rich colors inspired by Obsidian's default dark theme
+
+markdown-background = 1E1E1E
+markdown-surface = 262626
+markdown-code-background = 2D2D2D
+markdown-text-primary = DCDDDE
+markdown-text-secondary = A9B7C6
+markdown-text-muted = 7A8288
+markdown-accent = 7F6DF2
+markdown-success = 50C878
+markdown-border = 3D3D3D
+markdown-syntax-keyword = E06C75
+markdown-syntax-string = 98C379
+markdown-syntax-comment = 5C6370
+markdown-syntax-number = D19A66
+markdown-syntax-type = E5C07B
+markdown-syntax-function = 61AFEF

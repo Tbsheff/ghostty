@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import Darwin
+import GhosttyKit
 
 /// State management for the markdown panel and file browser
 @MainActor
@@ -145,6 +146,9 @@ struct TerminalWithPanelView<Content: View>: View {
     /// Panel state
     @ObservedObject var panelState: MarkdownPanelState
 
+    /// Ghostty config for theme customization
+    var config: Ghostty.Config? = nil
+
     /// Width of the file browser (persisted via AppStorage)
     @AppStorage("ghostty.fileBrowserWidth") private var fileBrowserWidth: Double = 240
 
@@ -161,8 +165,9 @@ struct TerminalWithPanelView<Content: View>: View {
         dampingFraction: PanelTheme.springDamping
     )
 
-    init(panelState: MarkdownPanelState, @ViewBuilder content: () -> Content) {
+    init(panelState: MarkdownPanelState, config: Ghostty.Config? = nil, @ViewBuilder content: () -> Content) {
         self.panelState = panelState
+        self.config = config
         self.content = content()
     }
 
@@ -202,7 +207,8 @@ struct TerminalWithPanelView<Content: View>: View {
                     onRefresh: {
                         panelState.refresh()
                     },
-                    onExecuteCode: handleExecuteCode
+                    onExecuteCode: handleExecuteCode,
+                    config: config
                 )
             }
         )

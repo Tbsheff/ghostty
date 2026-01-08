@@ -1,0 +1,18 @@
+# GitHub Dark Markdown Theme
+# Inspired by GitHub's dark mode markdown rendering
+
+markdown-background = 0D1117
+markdown-surface = 161B22
+markdown-code-background = 1C2128
+markdown-text-primary = E6EDF3
+markdown-text-secondary = 8B949E
+markdown-text-muted = 6E7681
+markdown-accent = 58A6FF
+markdown-success = 3FB950
+markdown-border = 30363D
+markdown-syntax-keyword = FF7B72
+markdown-syntax-string = A5D6FF
+markdown-syntax-comment = 8B949E
+markdown-syntax-number = 79C0FF
+markdown-syntax-type = FFA657
+markdown-syntax-function = D2A8FF
