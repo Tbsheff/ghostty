@@ -318,6 +318,10 @@ test "url regex" {
             .expect = "README.md",
         },
         .{
+            .input = "  - README.md, CONTRIBUTING.md, HACKING.md",
+            .expect = "README.md",
+        },
+        .{
             .input = "edit config.json and restart",
             .expect = "config.json",
         },
