@@ -52,6 +52,9 @@ class BaseTerminalController: NSWindowController,
     /// Set if the terminal view should show the update overlay.
     @Published var updateOverlayIsVisible: Bool = false
 
+    /// The markdown panel state for this terminal window.
+    let markdownPanelState = MarkdownPanelState()
+
     /// Whether the terminal surface should focus when the mouse is over it.
     var focusFollowsMouse: Bool {
         self.derivedConfig.focusFollowsMouse
@@ -83,6 +86,9 @@ class BaseTerminalController: NSWindowController,
 
     /// The cancellables related to our focused surface.
     private var focusedSurfaceCancellables: Set<AnyCancellable> = []
+
+    /// The cancellables for panel state observation.
+    private var panelStateCancellables: Set<AnyCancellable> = []
 
     /// An override title for the tab/window set by the user via prompt_tab_title.
     /// When set, this takes precedence over the computed title from the terminal.
@@ -162,6 +168,16 @@ class BaseTerminalController: NSWindowController,
             self,
             selector: #selector(ghosttyMaximizeDidToggle(_:)),
             name: .ghosttyMaximizeDidToggle,
+            object: nil)
+        center.addObserver(
+            self,
+            selector: #selector(ghosttyToggleMarkdownPanel(_:)),
+            name: .ghosttyToggleMarkdownPanel,
+            object: nil)
+        center.addObserver(
+            self,
+            selector: #selector(ghosttyOpenMarkdownFile(_:)),
+            name: .ghosttyOpenMarkdownFile,
             object: nil)
 
         // Splits
@@ -573,6 +589,20 @@ class BaseTerminalController: NSWindowController,
         guard let surfaceView = notification.object as? Ghostty.SurfaceView else { return }
         guard surfaceTree.contains(surfaceView) else { return }
         window.zoom(nil)
+    }
+
+    @objc private func ghosttyToggleMarkdownPanel(_ notification: Notification) {
+        // Only handle if this is the key window to prevent all windows responding
+        guard window?.isKeyWindow == true else { return }
+        toggleMarkdownPanel(nil)
+    }
+
+    @objc private func ghosttyOpenMarkdownFile(_ notification: Notification) {
+        // Only handle if this is the key window to prevent all windows responding
+        guard window?.isKeyWindow == true else { return }
+        guard let path = notification.userInfo?["path"] as? String else { return }
+        // Load the file in the markdown panel
+        markdownPanelState.loadFile(at: path)
     }
 
     @objc private func ghosttyDidCloseSurface(_ notification: Notification) {
@@ -1141,6 +1171,26 @@ class BaseTerminalController: NSWindowController,
         
         // Set our update overlay state
         updateOverlayIsVisible = defaultUpdateOverlayVisibility()
+
+        // Observe panel state changes and sync with window
+        setupPanelStateObservers()
+    }
+
+    /// Set up observers to sync panel state with the window's view model
+    private func setupPanelStateObservers() {
+        guard let terminalWindow = window as? TerminalWindow else { return }
+
+        // Use combineLatest to get both values atomically, avoiding race conditions
+        // where reading "the other" value could return stale data
+        markdownPanelState.$fileBrowserVisible
+            .combineLatest(markdownPanelState.$markdownVisible)
+            .sink { [weak terminalWindow] (fileBrowserVisible, markdownVisible) in
+                terminalWindow?.updatePanelState(
+                    fileBrowserVisible: fileBrowserVisible,
+                    markdownVisible: markdownVisible
+                )
+            }
+            .store(in: &panelStateCancellables)
     }
     
     func defaultUpdateOverlayVisibility() -> Bool {
@@ -1360,7 +1410,19 @@ class BaseTerminalController: NSWindowController,
     @IBAction func toggleCommandPalette(_ sender: Any?) {
         commandPaletteIsShowing.toggle()
     }
-    
+
+    @IBAction func toggleMarkdownPanel(_ sender: Any?) {
+        markdownPanelState.toggle()
+    }
+
+    @IBAction func toggleFileBrowser(_ sender: Any?) {
+        markdownPanelState.toggleFileBrowser()
+    }
+
+    @IBAction func toggleMarkdownPreview(_ sender: Any?) {
+        markdownPanelState.toggleMarkdown()
+    }
+
     @IBAction func find(_ sender: Any) {
         focusedSurface?.find(sender)
     }

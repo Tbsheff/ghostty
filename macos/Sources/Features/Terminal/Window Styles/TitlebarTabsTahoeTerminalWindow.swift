@@ -8,7 +8,35 @@ import SwiftUI
 class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSToolbarDelegate {
     /// The view model for SwiftUI views
     private var viewModel = ViewModel()
-    
+
+    /// Left sidebar toggle button
+    private lazy var fileBrowserButton: NSHostingView<ToolbarToggleButton> = {
+        let view = NSHostingView(rootView: ToolbarToggleButton(
+            viewModel: viewModel,
+            icon: "sidebar.left",
+            isActiveKeyPath: \.fileBrowserVisible,
+            action: { [weak self] in
+                self?.terminalController?.toggleFileBrowser(nil)
+            }
+        ))
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+
+    /// Right markdown toggle button
+    private lazy var markdownButton: NSHostingView<ToolbarToggleButton> = {
+        let view = NSHostingView(rootView: ToolbarToggleButton(
+            viewModel: viewModel,
+            icon: "doc.richtext",
+            isActiveKeyPath: \.markdownVisible,
+            action: { [weak self] in
+                self?.terminalController?.toggleMarkdownPreview(nil)
+            }
+        ))
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+
     /// Titlebar tabs can't support the update accessory because of the way we layout
     /// the native tabs back into the menu bar.
     override var supportsUpdateAccessory: Bool { false }
@@ -64,8 +92,14 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
 
     override func resignMain() {
         super.resignMain()
-        
+
         viewModel.isMainWindow = false
+    }
+
+    override func updatePanelState(fileBrowserVisible: Bool, markdownVisible: Bool) {
+        super.updatePanelState(fileBrowserVisible: fileBrowserVisible, markdownVisible: markdownVisible)
+        self.viewModel.fileBrowserVisible = fileBrowserVisible
+        self.viewModel.markdownVisible = markdownVisible
     }
 
     /// On our Tahoe titlebar tabs, we need to fix up right click events because they don't work
@@ -189,7 +223,7 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         guard let clipView = tabBarView.firstSuperview(withClassName: "NSTitlebarAccessoryClipView") else { return }
         guard let accessoryView = clipView.subviews[safe: 0] else { return }
         guard let toolbarView = titlebarView.firstDescendant(withClassName: "NSToolbarView") else { return }
-        
+
         // Make sure tabBar's height won't be stretched
         guard let newTabButton = titlebarView.firstDescendant(withClassName: "NSTabBarNewTabButton") else { return }
         tabBarView.frame.size.height = newTabButton.frame.width
@@ -204,15 +238,51 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         case .visible: 70
         }
 
+        // Add toggle buttons to the toolbar view
+        let buttonWidth: CGFloat = 32
+        let buttonPadding: CGFloat = 8
+
+        // Add file browser button on the left (after window buttons)
+        if fileBrowserButton.superview != container {
+            fileBrowserButton.removeFromSuperview()
+            container.addSubview(fileBrowserButton)
+        }
+        // Ensure button is on top
+        fileBrowserButton.layer?.zPosition = 1000
+
+        // Add markdown button on the right
+        if markdownButton.superview != container {
+            markdownButton.removeFromSuperview()
+            container.addSubview(markdownButton)
+        }
+        // Ensure button is on top
+        markdownButton.layer?.zPosition = 1000
+
         // Constrain the accessory clip view (the parent of the accessory view
         // usually that clips the children) to the container view.
         clipView.translatesAutoresizingMaskIntoConstraints = false
         accessoryView.translatesAutoresizingMaskIntoConstraints = false
 
-        // Setup all our constraints
+        // Setup all our constraints - leave room for toggle buttons on left and right
+        let tabBarLeftPadding = leftPadding + buttonWidth + buttonPadding
+        let tabBarRightPadding = buttonWidth + buttonPadding
+
         NSLayoutConstraint.activate([
-            clipView.leftAnchor.constraint(equalTo: container.leftAnchor, constant: leftPadding),
-            clipView.rightAnchor.constraint(equalTo: container.rightAnchor),
+            // File browser button constraints (left side)
+            fileBrowserButton.leftAnchor.constraint(equalTo: container.leftAnchor, constant: leftPadding + buttonPadding),
+            fileBrowserButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            fileBrowserButton.widthAnchor.constraint(equalToConstant: 28),
+            fileBrowserButton.heightAnchor.constraint(equalToConstant: 22),
+
+            // Markdown button constraints (right side)
+            markdownButton.rightAnchor.constraint(equalTo: container.rightAnchor, constant: -buttonPadding),
+            markdownButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            markdownButton.widthAnchor.constraint(equalToConstant: 28),
+            markdownButton.heightAnchor.constraint(equalToConstant: 22),
+
+            // Tab bar clip view constraints (between the buttons)
+            clipView.leftAnchor.constraint(equalTo: container.leftAnchor, constant: tabBarLeftPadding),
+            clipView.rightAnchor.constraint(equalTo: container.rightAnchor, constant: -tabBarRightPadding),
             clipView.topAnchor.constraint(equalTo: container.topAnchor, constant: 2),
             clipView.heightAnchor.constraint(equalTo: container.heightAnchor),
             accessoryView.leftAnchor.constraint(equalTo: clipView.leftAnchor),
@@ -253,6 +323,10 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             self.viewModel.hasTabBar = false
         }
 
+        // Remove toggle buttons from the toolbar
+        fileBrowserButton.removeFromSuperview()
+        markdownButton.removeFromSuperview()
+
         // Clear our observations
         self.tabBarObserver = nil
     }
@@ -260,11 +334,11 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
     // MARK: NSToolbarDelegate
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        return [.title, .flexibleSpace, .space]
+        return [.title, .flexibleSpace, .space, .fileBrowserToggle, .markdownToggle]
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        return [.flexibleSpace, .title, .flexibleSpace]
+        return [.fileBrowserToggle, .flexibleSpace, .title, .flexibleSpace, .markdownToggle]
     }
 
     func toolbar(_ toolbar: NSToolbar,
@@ -282,7 +356,41 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             // This is the documented way to avoid the glass view on an item.
             // We don't want glass on our title.
             item.isBordered = false
-            
+
+            return item
+        case .fileBrowserToggle:
+            let item = NSToolbarItem(itemIdentifier: .fileBrowserToggle)
+            let hostingView = NSHostingView(rootView: ToolbarToggleButton(
+                icon: "sidebar.left",
+                isActive: viewModel.fileBrowserVisible,
+                action: { [weak self] in
+                    self?.terminalController?.toggleFileBrowser(nil)
+                }
+            ))
+            hostingView.frame = NSRect(x: 0, y: 0, width: 28, height: 22)
+            item.view = hostingView
+            item.isBordered = false
+            item.visibilityPriority = .high
+            item.toolTip = "Toggle File Browser (⌘B)"
+            item.minSize = NSSize(width: 28, height: 22)
+            item.maxSize = NSSize(width: 28, height: 22)
+            return item
+        case .markdownToggle:
+            let item = NSToolbarItem(itemIdentifier: .markdownToggle)
+            let hostingView = NSHostingView(rootView: ToolbarToggleButton(
+                icon: "doc.richtext",
+                isActive: viewModel.markdownVisible,
+                action: { [weak self] in
+                    self?.terminalController?.toggleMarkdownPreview(nil)
+                }
+            ))
+            hostingView.frame = NSRect(x: 0, y: 0, width: 28, height: 22)
+            item.view = hostingView
+            item.isBordered = false
+            item.visibilityPriority = .high
+            item.toolTip = "Toggle Markdown Preview (⇧⌘M)"
+            item.minSize = NSSize(width: 28, height: 22)
+            item.maxSize = NSSize(width: 28, height: 22)
             return item
         default:
             return NSToolbarItem(itemIdentifier: itemIdentifier)
@@ -296,12 +404,18 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         @Published var title: String = "👻 Ghostty"
         @Published var hasTabBar: Bool = false
         @Published var isMainWindow: Bool = true
+        @Published var fileBrowserVisible: Bool = false
+        @Published var markdownVisible: Bool = false
     }
 }
 
 extension NSToolbarItem.Identifier {
     /// Displays the title of the window
     static let title = NSToolbarItem.Identifier("Title")
+    /// Toggle file browser panel
+    static let fileBrowserToggle = NSToolbarItem.Identifier("FileBrowserToggle")
+    /// Toggle markdown preview panel
+    static let markdownToggle = NSToolbarItem.Identifier("MarkdownToggle")
 }
 
 extension TitlebarTabsTahoeTerminalWindow {
@@ -337,6 +451,73 @@ extension TitlebarTabsTahoeTerminalWindow {
                 .truncationMode(.tail)
                 .frame(maxWidth: .greatestFiniteMagnitude, alignment: .center)
                 .opacity(viewModel.hasTabBar ? 0 : 1) // hide when in fullscreen mode, where title bar will appear in the leading area under window buttons
+        }
+    }
+
+    /// A toggle button for the toolbar - supports both static and reactive modes
+    struct ToolbarToggleButton: View {
+        // For reactive mode with viewModel
+        @ObservedObject private var viewModel: ViewModel
+        private let isActiveKeyPath: KeyPath<ViewModel, Bool>?
+
+        // For static mode
+        private let staticIsActive: Bool?
+
+        let icon: String
+        let action: () -> Void
+
+        @State private var isHovered = false
+
+        /// Reactive initializer - updates when viewModel changes
+        init(viewModel: ViewModel, icon: String, isActiveKeyPath: KeyPath<ViewModel, Bool>, action: @escaping () -> Void) {
+            self.viewModel = viewModel
+            self.icon = icon
+            self.isActiveKeyPath = isActiveKeyPath
+            self.staticIsActive = nil
+            self.action = action
+        }
+
+        /// Static initializer - for toolbar items that don't need reactive updates
+        init(icon: String, isActive: Bool, action: @escaping () -> Void) {
+            self.viewModel = ViewModel()
+            self.icon = icon
+            self.isActiveKeyPath = nil
+            self.staticIsActive = isActive
+            self.action = action
+        }
+
+        private var isActive: Bool {
+            if let keyPath = isActiveKeyPath {
+                return viewModel[keyPath: keyPath]
+            }
+            return staticIsActive ?? false
+        }
+
+        var body: some View {
+            Button(action: action) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(buttonColor)
+            }
+            .buttonStyle(.plain)
+            .frame(width: 28, height: 22)
+            .background(backgroundColor)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .onHover { isHovered = $0 }
+        }
+
+        private var buttonColor: Color {
+            if isActive {
+                return .accentColor
+            }
+            return isHovered ? .primary : .secondary
+        }
+
+        private var backgroundColor: Color {
+            if isActive {
+                return Color.accentColor.opacity(0.2)
+            }
+            return isHovered ? Color.primary.opacity(0.1) : .clear
         }
     }
 }

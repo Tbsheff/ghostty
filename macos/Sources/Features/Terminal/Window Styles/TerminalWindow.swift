@@ -18,11 +18,25 @@ class TerminalWindow: NSWindow {
     /// The view model for SwiftUI views
     private var viewModel = ViewModel()
 
+    /// Update the panel visibility state in the view model
+    func updatePanelState(fileBrowserVisible: Bool, markdownVisible: Bool) {
+        DispatchQueue.main.async {
+            self.viewModel.fileBrowserVisible = fileBrowserVisible
+            self.viewModel.markdownVisible = markdownVisible
+        }
+    }
+
     /// Reset split zoom button in titlebar
     private let resetZoomAccessory = NSTitlebarAccessoryViewController()
 
     /// Update notification UI in titlebar
     private let updateAccessory = NSTitlebarAccessoryViewController()
+
+    /// File browser toggle button in titlebar
+    private let fileBrowserAccessory = NSTitlebarAccessoryViewController()
+
+    /// Markdown preview toggle button in titlebar
+    private let markdownAccessory = NSTitlebarAccessoryViewController()
 
     /// Visual indicator that mirrors the selected tab color.
     private lazy var tabColorIndicator: NSHostingView<TabColorIndicatorView> = {
@@ -147,6 +161,29 @@ class TerminalWindow: NSWindow {
                 ))
                 addTitlebarAccessoryViewController(updateAccessory)
                 updateAccessory.view.translatesAutoresizingMaskIntoConstraints = false
+            }
+
+            // Create file browser and markdown toggle accessories only for non-tabs titlebar styles
+            // In tabs mode, these would overlap with the integrated tab bar
+            let titlebarStyle = config.macosTitlebarStyle
+            if titlebarStyle != "tabs" {
+                fileBrowserAccessory.layoutAttribute = .right
+                fileBrowserAccessory.view = NSHostingView(rootView: FileBrowserToggleAccessoryView(
+                    viewModel: viewModel,
+                    action: { [weak self] in
+                        self?.terminalController?.toggleFileBrowser(nil)
+                    }))
+                addTitlebarAccessoryViewController(fileBrowserAccessory)
+                fileBrowserAccessory.view.translatesAutoresizingMaskIntoConstraints = false
+
+                markdownAccessory.layoutAttribute = .right
+                markdownAccessory.view = NSHostingView(rootView: MarkdownToggleAccessoryView(
+                    viewModel: viewModel,
+                    action: { [weak self] in
+                        self?.terminalController?.toggleMarkdownPreview(nil)
+                    }))
+                addTitlebarAccessoryViewController(markdownAccessory)
+                markdownAccessory.view.translatesAutoresizingMaskIntoConstraints = false
             }
         }
 
@@ -280,6 +317,8 @@ class TerminalWindow: NSWindow {
         if let idx = titlebarAccessoryViewControllers.firstIndex(of: resetZoomAccessory) {
             removeTitlebarAccessoryViewController(at: idx)
         }
+        // Note: We keep fileBrowserAccessory and markdownAccessory visible
+        // even when the tab bar is shown, so users can toggle panels in tab mode.
 
         // We don't need to do this with the update accessory. I don't know why but
         // everything works fine.
@@ -290,6 +329,7 @@ class TerminalWindow: NSWindow {
             if titlebarAccessoryViewControllers.firstIndex(of: resetZoomAccessory) == nil {
                 addTitlebarAccessoryViewController(resetZoomAccessory)
             }
+            // fileBrowserAccessory and markdownAccessory are kept visible at all times
         }
     }
 
@@ -594,6 +634,8 @@ extension TerminalWindow {
         @Published var isSurfaceZoomed: Bool = false
         @Published var hasToolbar: Bool = false
         @Published var isMainWindow: Bool = true
+        @Published var fileBrowserVisible: Bool = false
+        @Published var markdownVisible: Bool = false
 
         /// Calculates the top padding based on toolbar visibility and macOS version
         fileprivate var accessoryTopPadding: CGFloat {
@@ -640,6 +682,68 @@ extension TerminalWindow {
             UpdatePill(model: model)
                 .padding(.top, viewModel.accessoryTopPadding)
                 .padding(.trailing, viewModel.accessoryTopPadding)
+        }
+    }
+
+    struct FileBrowserToggleAccessoryView: View {
+        @ObservedObject var viewModel: ViewModel
+        let action: () -> Void
+
+        var body: some View {
+            VStack {
+                Button(action: action) {
+                    Image(systemName: viewModel.fileBrowserVisible ? "sidebar.left" : "sidebar.left")
+                        .foregroundColor(buttonColor)
+                }
+                .buttonStyle(.plain)
+                .help("Toggle File Browser (⌘B)")
+                .frame(width: 20, height: 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(viewModel.fileBrowserVisible ? Color.accentColor.opacity(0.2) : Color.clear)
+                )
+                Spacer()
+            }
+            .padding(.top, viewModel.accessoryTopPadding)
+            .padding(.trailing, 6)
+        }
+
+        private var buttonColor: Color {
+            if viewModel.fileBrowserVisible {
+                return .accentColor
+            }
+            return viewModel.isMainWindow ? .secondary : .secondary.opacity(0.5)
+        }
+    }
+
+    struct MarkdownToggleAccessoryView: View {
+        @ObservedObject var viewModel: ViewModel
+        let action: () -> Void
+
+        var body: some View {
+            VStack {
+                Button(action: action) {
+                    Image(systemName: "doc.richtext")
+                        .foregroundColor(buttonColor)
+                }
+                .buttonStyle(.plain)
+                .help("Toggle Markdown Preview (⇧⌘M)")
+                .frame(width: 20, height: 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(viewModel.markdownVisible ? Color.accentColor.opacity(0.2) : Color.clear)
+                )
+                Spacer()
+            }
+            .padding(.top, viewModel.accessoryTopPadding)
+            .padding(.trailing, 6)
+        }
+
+        private var buttonColor: Color {
+            if viewModel.markdownVisible {
+                return .accentColor
+            }
+            return viewModel.isMainWindow ? .secondary : .secondary.opacity(0.5)
         }
     }
 

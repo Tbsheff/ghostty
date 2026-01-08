@@ -1086,6 +1086,37 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // apply this based on the root config but change it later based on surface
         // config (see focused surface change callback).
         syncAppearance(.init(config))
+
+        // Apply tab bar visibility setting
+        applyTabBarVisibility(config)
+    }
+
+    /// Applies the window-show-tab-bar configuration setting
+    private func applyTabBarVisibility(_ config: Ghostty.Config) {
+        guard let window else { return }
+
+        switch config.windowShowTabBar {
+        case .always:
+            // Force the tab bar to be visible even with a single tab.
+            // A single window may not have a tabGroup yet, so we check both cases.
+            // toggleTabBar will create a tab group if one doesn't exist.
+            DispatchQueue.main.async {
+                // If there's no tab group or the tab bar isn't visible, toggle it on
+                if window.tabGroup == nil || !window.tabGroup!.isTabBarVisible {
+                    window.toggleTabBar(nil)
+                }
+            }
+        case .never:
+            // Hide the tab bar completely
+            DispatchQueue.main.async {
+                if let tabGroup = window.tabGroup, tabGroup.isTabBarVisible {
+                    window.toggleTabBar(nil)
+                }
+            }
+        case .auto:
+            // Default macOS behavior - show when multiple tabs exist
+            break
+        }
     }
 
     // Shows the "+" button in the tab bar, responds to that click.

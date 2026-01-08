@@ -189,6 +189,17 @@ extension Ghostty {
             return String(cString: ptr)
         }
 
+        var windowShowTabBar: WindowShowTabBar {
+            let defaultValue = WindowShowTabBar.auto
+            guard let config = self.config else { return defaultValue }
+            var v: UnsafePointer<Int8>? = nil
+            let key = "window-show-tab-bar"
+            guard ghostty_config_get(config, &v, key, UInt(key.lengthOfBytes(using: .utf8))) else { return defaultValue }
+            guard let ptr = v else { return defaultValue }
+            let str = String(cString: ptr)
+            return WindowShowTabBar(rawValue: str) ?? defaultValue
+        }
+
         var windowDecorations: Bool {
             let defaultValue = true
             guard let config = self.config else { return defaultValue }
@@ -799,5 +810,11 @@ extension Ghostty.Config {
             case .none: return false
             }
         }
+    }
+
+    enum WindowShowTabBar: String {
+        case always
+        case auto
+        case never
     }
 }

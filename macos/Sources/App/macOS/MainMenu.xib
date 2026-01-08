@@ -363,6 +363,19 @@
                                     <action selector="toggleTerminalInspector:" target="-1" id="87m-3R-fQl"/>
                                 </connections>
                             </menuItem>
+                            <menuItem isSeparatorItem="YES" id="mkd-sep-1"/>
+                            <menuItem title="Toggle File Browser" keyEquivalent="b" id="mkd-fb-1">
+                                <modifierMask key="keyEquivalentModifierMask" command="YES"/>
+                                <connections>
+                                    <action selector="toggleFileBrowser:" target="-1" id="mkd-fb-act"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Toggle Markdown Preview" keyEquivalent="M" id="mkd-pnl-1">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="toggleMarkdownPreview:" target="-1" id="mkd-act-1"/>
+                                </connections>
+                            </menuItem>
                         </items>
                     </menu>
                 </menuItem>

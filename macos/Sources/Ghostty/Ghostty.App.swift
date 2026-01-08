@@ -681,7 +681,7 @@ extension Ghostty {
             _ v: ghostty_action_open_url_s
         ) -> Bool {
             let action = Ghostty.Action.OpenURL(c: v)
-            
+
             // If the URL doesn't have a valid scheme we assume its a file path. The URL
             // initializer will gladly take invalid URLs (e.g. plain file paths) and turn
             // them into schema-less URLs, but these won't open properly in text editors.
@@ -692,7 +692,21 @@ extension Ghostty {
             } else {
                 url = URL(filePath: action.url)
             }
-            
+
+            // Check if this is a markdown file - open in built-in panel instead of external app
+            if url.isFileURL && MarkdownFileDetector.isMarkdownFile(url) {
+                let path = url.path
+                // Verify the file exists before trying to open it
+                if FileManager.default.fileExists(atPath: path) {
+                    NotificationCenter.default.post(
+                        name: .ghosttyOpenMarkdownFile,
+                        object: nil,
+                        userInfo: ["path": path]
+                    )
+                    return true
+                }
+            }
+
             switch action.kind {
             case .text:
                 // Open with the default editor for `*.ghostty` file or just system text editor
@@ -701,15 +715,15 @@ extension Ghostty {
                     NSWorkspace.shared.open([url], withApplicationAt: textEditor, configuration: NSWorkspace.OpenConfiguration())
                     return true
                 }
-                
+
             case .html:
                 // The extension will be HTML and we do the right thing automatically.
                 break
-                
+
             case .unknown:
                 break
             }
-            
+
             // Open with the default application for the URL
             NSWorkspace.shared.open(url)
             return true
