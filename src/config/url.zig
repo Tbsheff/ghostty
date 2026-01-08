@@ -26,7 +26,8 @@ pub const regex =
     "(?:" ++ url_schemes ++
     \\)(?:
     ++ ipv6_url_pattern ++
-    \\|[\w\-.~:/?#@!$&*+,;=%]+(?:[\(\[]\w*[\)\]])?)+(?<![,.])|(?:\.\.\/|\.\/|\/)(?:(?=[\w\-.~:\/?#@!$&*+,;=%]*\.)[\w\-.~:\/?#@!$&*+,;=%]+(?: [\w\-.~:\/?#@!$&*+,;=%]*[\/.])*(?: +(?= *$))?|(?![\w\-.~:\/?#@!$&*+,;=%]*\.)[\w\-.~:\/?#@!$&*+,;=%]+(?: [\w\-.~:\/?#@!$&*+,;=%]+)*(?: +(?= *$))?)
+    \\|[\w\-.~:/?#@!$&*+,;=%]+(?:[\(\[]\w*[\)\]])?)+(?<![,.])|(?:\.\.\/|\.\/|~\/|\/|\$[A-Z_]+\/)(?:(?=[\w\-.~:\/?#@!$&*+,;=%]*\.)[\w\-.~:\/?#@!$&*+,;=%]+(?: [\w\-.~:\/?#@!$&*+,;=%]*[\/.])*(?: +(?= *$))?|(?![\w\-.~:\/?#@!$&*+,;=%]*\.)[\w\-.~:\/?#@!$&*+,;=%]+(?: [\w\-.~:\/?#@!$&*+,;=%]+)*(?: +(?= *$))?)(?<!:)|(?<![:\w/.~])\.?[\w][\w\-]*(?:/[\w\-.]+)+
+    ++ bare_filename_pattern
     ;
 const url_schemes =
     \\https?://|mailto:|ftp://|file:|ssh:|git://|ssh://|tel:|magnet:|ipfs://|ipns://|gemini://|gopher://|news:
@@ -34,6 +35,20 @@ const url_schemes =
 
 const ipv6_url_pattern =
     \\(?:\[[:0-9a-fA-F]+(?:[:0-9a-fA-F]*)+\](?::[0-9]+)?)
+;
+
+/// Common file extensions for bare filename detection
+const file_extensions =
+    \\md|markdown|json|yaml|yml|py|rb|rs|go|js|ts|tsx|jsx|swift|zig|c|h|cpp|hpp|java|kt|sh|bash|zsh|toml|ini|cfg|conf|txt|log|xml|html|css|scss|sql
+;
+
+/// Pattern for bare filenames with extensions (e.g., README.md, config.json)
+/// Uses word boundary and extension whitelist to avoid matching version numbers
+/// (v1.2.3) or method calls (foo.bar())
+const bare_filename_pattern =
+    \\|(?<![/\\])(?:^|(?<=[^a-zA-Z0-9_.]))[\w][\w.-]*\.(?:
+    ++ file_extensions ++
+    \\)(?![(\w])
 ;
 
 test "url regex" {
@@ -270,12 +285,74 @@ test "url regex" {
             .input = "/tmp/test folder/file.txt",
             .expect = "/tmp/test folder/file.txt",
         },
+        // Tilde home paths
+        .{
+            .input = "config at ~/.config/ghostty/config",
+            .expect = "~/.config/ghostty/config",
+        },
+        // Dot-prefixed directories (without ./)
+        .{
+            .input = "found in .agents/commands/gh-issue file",
+            .expect = ".agents/commands/gh-issue",
+        },
+        .{
+            .input = "edit .github/workflows/ci.yml now",
+            .expect = ".github/workflows/ci.yml",
+        },
+        .{
+            .input = ".hidden/nested/path.txt",
+            .expect = ".hidden/nested/path.txt",
+        },
+        // Relative paths with directories
+        .{
+            .input = "look in src/config/url.zig for regex",
+            .expect = "src/config/url.zig",
+        },
+        .{
+            .input = "found macos/Sources/Features/file.swift here",
+            .expect = "macos/Sources/Features/file.swift",
+        },
+        // Bare filenames with extensions
+        .{
+            .input = "see README.md for details",
+            .expect = "README.md",
+        },
+        .{
+            .input = "edit config.json and restart",
+            .expect = "config.json",
+        },
+        .{
+            .input = "run main.py to start",
+            .expect = "main.py",
+        },
+        // === NEGATIVE TESTS: Should NOT match ===
+        .{
+            .input = "the word README without extension",
+            .expect = "",
+            .num_matches = 0,
+        },
+        .{
+            .input = "function call like foo.bar() here",
+            .expect = "",
+            .num_matches = 0,
+        },
+        .{
+            .input = "version number v1.2.3 in text",
+            .expect = "",
+            .num_matches = 0,
+        },
     };
 
     for (cases) |case| {
         //std.debug.print("input: {s}\n", .{case.input});
         //std.debug.print("match: {s}\n", .{case.expect});
-        var reg = try re.search(case.input, .{});
+        const result = re.search(case.input, .{});
+        if (case.num_matches == 0) {
+            // Expect no match (Mismatch error)
+            try testing.expectError(oni.errors.Error.Mismatch, result);
+            continue;
+        }
+        var reg = try result;
         //std.debug.print("count: {d}\n", .{@as(usize, reg.count())});
         //std.debug.print("starts: {d}\n", .{reg.starts()});
         //std.debug.print("ends: {d}\n", .{reg.ends()});
