@@ -1,28 +1,54 @@
 import SwiftUI
 
 struct SettingsView: View {
-    // We need access to our app delegate to know if we're quitting or not.
     @EnvironmentObject private var appDelegate: AppDelegate
 
     var body: some View {
-        HStack {
-            Image("AppIconImage")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 128, height: 128)
+        TabView {
+            GeneralSettingsView()
+                .tabItem { Label("General", systemImage: "gear") }
 
-            VStack(alignment: .leading) {
-                Text("Coming Soon. 🚧").font(.title)
-                Text("You can't configure settings in the GUI yet. To modify settings, " +
-                     "edit the file at $HOME/.config/ghostty/config.ghostty and restart Ghostty.")
-                .multilineTextAlignment(.leading)
-                .lineLimit(nil)
-            }
+            AppearanceSettingsView()
+                .tabItem { Label("Appearance", systemImage: "paintbrush") }
+
+            MarkdownSettingsView()
+                .tabItem { Label("Markdown", systemImage: "doc.richtext") }
+
+            AdvancedSettingsView()
+                .tabItem { Label("Advanced", systemImage: "gearshape.2") }
         }
-        .padding()
-        .frame(minWidth: 500, maxWidth: 500, minHeight: 156, maxHeight: 156)
+        .frame(width: 500, height: 400)
     }
 }
+
+// MARK: - General Settings
+
+struct GeneralSettingsView: View {
+    var body: some View {
+        Text("General settings coming soon")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Appearance Settings
+
+struct AppearanceSettingsView: View {
+    var body: some View {
+        Text("Appearance settings coming soon")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Advanced Settings
+
+struct AdvancedSettingsView: View {
+    var body: some View {
+        Text("Advanced settings coming soon")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Preview
 
 struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
