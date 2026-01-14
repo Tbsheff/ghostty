@@ -56,12 +56,12 @@ struct NativeMarkdownHeader: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Leading: File icon + breadcrumbs
+            // Leading: File icon + breadcrumbs + live indicator
             leadingContent
 
             Spacer(minLength: 12)
 
-            // Trailing: Live indicator + actions
+            // Trailing: Actions grouped together
             trailingContent
         }
         .frame(height: 38)
@@ -76,7 +76,7 @@ struct NativeMarkdownHeader: View {
 
     @ViewBuilder
     private var leadingContent: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             // Document icon
             Image(systemName: "doc.richtext")
                 .font(.system(size: 13, weight: .medium))
@@ -98,6 +98,29 @@ struct NativeMarkdownHeader: View {
                         .truncationMode(.middle)
                 }
             }
+            
+            // Live reload indicator (repositioned near breadcrumbs)
+            if isLiveReloading && !isSearchVisible {
+                Divider()
+                    .frame(height: 16)
+                    .padding(.leading, 4)
+                
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(theme.success)
+                        .frame(width: 6, height: 6)
+
+                    Text("Live")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(theme.success.opacity(0.12))
+                )
+            }
         }
     }
 
@@ -109,21 +132,17 @@ struct NativeMarkdownHeader: View {
                 searchField
             }
 
-            // Live reload indicator
-            if isLiveReloading && !isSearchVisible {
-                liveIndicator
-            }
-
-            // Action buttons
+            // Action buttons (grouped together on the right)
             HStack(spacing: 2) {
                 HeaderButton(
                     icon: "list.bullet.indent",
-                    tooltip: "Toggle Outline",
+                    tooltip: "Toggle Outline (⌘⇧O)",
                     isHovered: $outlineHovered,
                     theme: theme,
                     isActive: showOutline,
+                    keyboardShortcut: KeyboardShortcut("o", modifiers: [.command, .shift]),
                     action: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(.easeInOut(duration: 0.25)) {
                             showOutline.toggle()
                         }
                     }
@@ -131,10 +150,11 @@ struct NativeMarkdownHeader: View {
 
                 HeaderButton(
                     icon: "magnifyingglass",
-                    tooltip: "Search (/)",
+                    tooltip: "Search (⌘F, /)",
                     isHovered: $searchHovered,
                     theme: theme,
                     isActive: isSearchVisible,
+                    keyboardShortcut: KeyboardShortcut("f", modifiers: [.command]),
                     action: {
                         isSearchVisible.toggle()
                         if isSearchVisible {
@@ -150,6 +170,7 @@ struct NativeMarkdownHeader: View {
                     tooltip: "Refresh (⌘R)",
                     isHovered: $refreshHovered,
                     theme: theme,
+                    keyboardShortcut: KeyboardShortcut("r", modifiers: [.command]),
                     action: onRefresh
                 )
 
@@ -167,6 +188,10 @@ struct NativeMarkdownHeader: View {
     @ViewBuilder
     private var searchField: some View {
         HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 10))
+                .foregroundColor(theme.textMuted)
+
             TextField("Search...", text: $searchQuery)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
@@ -179,6 +204,8 @@ struct NativeMarkdownHeader: View {
                     isSearchVisible = false
                     searchQuery = ""
                 }
+                .accessibilityLabel("Search markdown")
+                .accessibilityHint("Type to search, press Escape to close")
 
             if !searchQuery.isEmpty {
                 Button(action: { searchQuery = "" }) {
@@ -187,6 +214,8 @@ struct NativeMarkdownHeader: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
+                .help("Clear search")
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, 10)
@@ -197,35 +226,16 @@ struct NativeMarkdownHeader: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
                         .stroke(theme.border.opacity(0.5), lineWidth: 1)
+                        .animation(.easeInOut(duration: 0.15), value: isSearchFocused.wrappedValue)
                 )
         )
         .frame(width: 160)
         .transition(.asymmetric(
-            insertion: .scale(scale: 0.9, anchor: .trailing).combined(with: .opacity),
-            removal: .scale(scale: 0.9, anchor: .trailing).combined(with: .opacity)
+            insertion: .move(edge: .trailing).combined(with: .opacity),
+            removal: .move(edge: .trailing).combined(with: .opacity)
         ))
     }
 
-    @ViewBuilder
-    private var liveIndicator: some View {
-        HStack(spacing: 5) {
-            // Use a simple static indicator instead of infinite animation
-            // to prevent CPU usage when panel is open but not actively changing
-            Circle()
-                .fill(theme.success)
-                .frame(width: 6, height: 6)
-
-            Text("Live")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(theme.textMuted)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(theme.success.opacity(0.12))
-        )
-    }
 }
 
 // MARK: - Header Button
@@ -236,23 +246,39 @@ struct HeaderButton: View {
     @Binding var isHovered: Bool
     let theme: MarkdownTheme
     var isActive: Bool = false
+    var keyboardShortcut: KeyboardShortcut? = nil
     let action: () -> Void
 
-    var body: some View {
+    @FocusState private var isFocused: Bool
+
+    private var buttonContent: some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(isActive ? theme.accent : (isHovered ? theme.textPrimary : theme.textSecondary))
+                .foregroundColor(isActive ? theme.accent : (isHovered || isFocused ? theme.textPrimary : theme.textSecondary))
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(isActive ? theme.accent.opacity(0.15) : (isHovered ? theme.surfaceElevated : Color.clear))
+                        .fill(isActive ? theme.accent.opacity(0.15) : (isHovered || isFocused ? theme.surfaceElevated : Color.clear))
+                        .animation(.easeInOut(duration: 0.15), value: isHovered || isFocused)
                 )
         }
         .buttonStyle(.plain)
         .help(tooltip)
         .onHover { isHovered = $0 }
+        .focused($isFocused)
+        .accessibilityLabel(tooltip)
+        .accessibilityHint("Press to activate")
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if let keyboardShortcut {
+            buttonContent.keyboardShortcut(keyboardShortcut)
+        } else {
+            buttonContent
+        }
     }
 }
 
@@ -281,6 +307,7 @@ struct NativeMarkdownPanelView: View {
     // Cache parsed blocks for both sidebar and content
     @State private var cachedBlocks: [MarkdownBlock] = []
     @State private var lastContent: String = ""
+    @State private var isHTMLDocument = false
 
     private var theme: MarkdownTheme {
         MarkdownTheme(colorScheme: colorScheme, config: config)
@@ -310,15 +337,22 @@ struct NativeMarkdownPanelView: View {
             } else {
                 // Get base directory from filePath for resolving relative image paths
                 let basePath = filePath.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }
-                NativeMarkdownView(
-                    blocks: cachedBlocks,
-                    scrollTarget: $scrollTarget,
-                    onExecuteCode: onExecuteCode,
-                    onClose: onClose,
-                    basePath: basePath,
-                    config: config
-                )
-                .environment(\.searchQuery, searchQuery)
+                if isHTMLDocument {
+                    HTMLDocumentView(
+                        html: content,
+                        baseURL: basePath.map { URL(fileURLWithPath: $0, isDirectory: true) }
+                    )
+                } else {
+                    NativeMarkdownView(
+                        blocks: cachedBlocks,
+                        scrollTarget: $scrollTarget,
+                        onExecuteCode: onExecuteCode,
+                        onClose: onClose,
+                        basePath: basePath,
+                        config: config
+                    )
+                    .environment(\.searchQuery, searchQuery)
+                }
             }
         }
         .background(theme.background)
@@ -333,7 +367,13 @@ struct NativeMarkdownPanelView: View {
     private func parseContentIfNeeded(_ newContent: String) {
         guard newContent != lastContent else { return }
         lastContent = newContent
-        cachedBlocks = MarkdownParser.parse(newContent)
+        let htmlDocument = MarkdownParser.looksLikeHTMLDocument(newContent)
+        isHTMLDocument = htmlDocument
+        if htmlDocument {
+            cachedBlocks = []
+        } else {
+            cachedBlocks = MarkdownParser.parse(newContent)
+        }
     }
 
     @ViewBuilder

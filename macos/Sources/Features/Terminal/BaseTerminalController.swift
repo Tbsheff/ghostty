@@ -1174,6 +1174,12 @@ class BaseTerminalController: NSWindowController,
 
         // Observe panel state changes and sync with window
         setupPanelStateObservers()
+        
+        // Set initial menu item states
+        updatePanelMenuItems(
+            fileBrowserVisible: markdownPanelState.fileBrowserVisible,
+            markdownVisible: markdownPanelState.markdownVisible
+        )
     }
 
     /// Set up observers to sync panel state with the window's view model
@@ -1184,13 +1190,44 @@ class BaseTerminalController: NSWindowController,
         // where reading "the other" value could return stale data
         markdownPanelState.$fileBrowserVisible
             .combineLatest(markdownPanelState.$markdownVisible)
-            .sink { [weak terminalWindow] (fileBrowserVisible, markdownVisible) in
+            .sink { [weak self, weak terminalWindow] (fileBrowserVisible, markdownVisible) in
                 terminalWindow?.updatePanelState(
                     fileBrowserVisible: fileBrowserVisible,
                     markdownVisible: markdownVisible
                 )
+                // Update menu items with appropriate checkmarks
+                self?.updatePanelMenuItems(fileBrowserVisible: fileBrowserVisible, markdownVisible: markdownVisible)
             }
             .store(in: &panelStateCancellables)
+    }
+
+    /// Update menu items to show checkmarks based on panel visibility state
+    private func updatePanelMenuItems(fileBrowserVisible: Bool, markdownVisible: Bool) {
+        guard let mainMenu = NSApp.mainMenu else { return }
+
+        // Find and update file browser menu item
+        if let fileBrowserItem = findMenuItem(in: mainMenu, action: #selector(toggleFileBrowser)) {
+            fileBrowserItem.state = fileBrowserVisible ? .on : .off
+        }
+
+        // Find and update markdown preview menu item
+        if let markdownItem = findMenuItem(in: mainMenu, action: #selector(toggleMarkdownPreview)) {
+            markdownItem.state = markdownVisible ? .on : .off
+        }
+    }
+
+    /// Recursively search for a menu item by action selector
+    private func findMenuItem(in menu: NSMenu, action: Selector) -> NSMenuItem? {
+        for item in menu.items {
+            if item.action == action {
+                return item
+            }
+            if let submenu = item.submenu,
+               let found = findMenuItem(in: submenu, action: action) {
+                return found
+            }
+        }
+        return nil
     }
     
     func defaultUpdateOverlayVisibility() -> Bool {

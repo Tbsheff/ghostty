@@ -696,6 +696,7 @@ extension TerminalWindow {
                         .foregroundColor(buttonColor)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("fileBrowser.toggle")
                 .help("Toggle File Browser (⌘B)")
                 .frame(width: 20, height: 20)
                 .background(
@@ -727,6 +728,7 @@ extension TerminalWindow {
                         .foregroundColor(buttonColor)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("markdown.toggle")
                 .help("Toggle Markdown Preview (⇧⌘M)")
                 .frame(width: 20, height: 20)
                 .background(

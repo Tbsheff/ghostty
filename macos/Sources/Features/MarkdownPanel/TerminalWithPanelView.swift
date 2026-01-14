@@ -6,11 +6,22 @@ import GhosttyKit
 /// State management for the markdown panel and file browser
 @MainActor
 class MarkdownPanelState: ObservableObject {
+    private static let fileBrowserVisibleKey = "ghostty.fileBrowserVisible"
+    private static let markdownVisibleKey = "ghostty.markdownVisible"
+
     /// Whether the file browser (left panel) is visible
-    @Published var fileBrowserVisible: Bool = false
+    @Published var fileBrowserVisible: Bool {
+        didSet {
+            UserDefaults.standard.set(fileBrowserVisible, forKey: Self.fileBrowserVisibleKey)
+        }
+    }
 
     /// Whether the markdown preview (right panel) is visible
-    @Published var markdownVisible: Bool = false
+    @Published var markdownVisible: Bool {
+        didSet {
+            UserDefaults.standard.set(markdownVisible, forKey: Self.markdownVisibleKey)
+        }
+    }
 
     /// The currently displayed markdown content
     @Published var content: String = ""
@@ -33,6 +44,12 @@ class MarkdownPanelState: ObservableObject {
     /// Debounce timer to batch rapid file changes
     private var debounceTimer: Timer?
     private let debounceInterval: TimeInterval = 0.15  // 150ms debounce
+
+    init() {
+        let defaults = UserDefaults.standard
+        self.fileBrowserVisible = defaults.bool(forKey: Self.fileBrowserVisibleKey)
+        self.markdownVisible = defaults.bool(forKey: Self.markdownVisibleKey)
+    }
 
     /// Load a markdown file asynchronously
     func loadFile(at path: String) {
@@ -150,20 +167,25 @@ struct TerminalWithPanelView<Content: View>: View {
     var config: Ghostty.Config? = nil
 
     /// Width of the file browser (persisted via AppStorage)
-    @AppStorage("ghostty.fileBrowserWidth") private var fileBrowserWidth: Double = 240
+    /// Clamped to prevent invalid persisted values from causing layout issues
+    @AppStorage("ghostty.fileBrowserWidth") private var fileBrowserWidth: Double = {
+        let stored = UserDefaults.standard.double(forKey: "ghostty.fileBrowserWidth")
+        return stored > 0 ? min(stored, 400) : 240
+    }()
 
     /// Width of the markdown panel (persisted via AppStorage)
-    @AppStorage("ghostty.markdownWidth") private var markdownWidth: Double = 420
+    /// Clamped to prevent invalid persisted values from causing layout issues
+    @AppStorage("ghostty.markdownWidth") private var markdownWidth: Double = {
+        let stored = UserDefaults.standard.double(forKey: "ghostty.markdownWidth")
+        return stored > 0 ? min(stored, 400) : 300
+    }()
 
     /// State for code execution safety
     @State private var pendingCode: String?
     @State private var showDangerAlert = false
 
-    /// Animation spring for panel transitions
-    private let panelSpring = Animation.spring(
-        response: PanelTheme.springResponse,
-        dampingFraction: PanelTheme.springDamping
-    )
+    /// Animation for panel transitions
+    private let panelTransition = Animation.easeInOut(duration: PanelTheme.animationNormal)
 
     init(panelState: MarkdownPanelState, config: Ghostty.Config? = nil, @ViewBuilder content: () -> Content) {
         self.panelState = panelState
@@ -184,32 +206,38 @@ struct TerminalWithPanelView<Content: View>: View {
                 set: { markdownWidth = Double($0) }
             ),
             left: {
-                FileBrowserView(
-                    rootPath: $panelState.browserRootPath,
-                    onFileSelected: { path in
-                        panelState.loadFile(at: path)
-                    }
-                )
+                PanelContainer(identifier: "fileBrowser.panel") {
+                    FileBrowserView(
+                        rootPath: $panelState.browserRootPath,
+                        onFileSelected: { path in
+                            panelState.loadFile(at: path)
+                        }
+                    )
+                }
             },
             center: {
-                content
+                PanelContainer(identifier: "terminal.panel") {
+                    content
+                }
             },
             right: {
-                // Native Swift markdown renderer - no WebKit/JS needed!
-                NativeMarkdownPanelView(
-                    content: $panelState.content,
-                    filePath: panelState.filePath,
-                    onClose: {
-                        withAnimation(panelSpring) {
-                            panelState.markdownVisible = false
-                        }
-                    },
-                    onRefresh: {
-                        panelState.refresh()
-                    },
-                    onExecuteCode: handleExecuteCode,
-                    config: config
-                )
+                PanelContainer(identifier: "markdown.panel") {
+                    // Native Swift markdown renderer - no WebKit/JS needed!
+                    NativeMarkdownPanelView(
+                        content: $panelState.content,
+                        filePath: panelState.filePath,
+                        onClose: {
+                            withAnimation(panelTransition) {
+                                panelState.markdownVisible = false
+                            }
+                        },
+                        onRefresh: {
+                            panelState.refresh()
+                        },
+                        onExecuteCode: handleExecuteCode,
+                        config: config
+                    )
+                }
             }
         )
         .alert("Potentially Dangerous Command", isPresented: $showDangerAlert) {
@@ -243,6 +271,43 @@ struct TerminalWithPanelView<Content: View>: View {
             object: nil,
             userInfo: ["text": code]
         )
+    }
+}
+
+struct PanelContainer<Content: View>: View {
+    let identifier: String?
+    let content: Content
+
+    init(identifier: String? = nil, @ViewBuilder content: () -> Content) {
+        self.identifier = identifier
+        self.content = content()
+    }
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: PanelTheme.radiusLarge, style: .continuous)
+                .fill(Color(PanelTheme.surfaceElevated))
+            content
+        }
+        .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusLarge, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: PanelTheme.radiusLarge, style: .continuous)
+                .stroke(Color(PanelTheme.borderSubtle), lineWidth: 1)
+        )
+        .padding(PanelTheme.spacing8)
+        .modifier(AccessibilityIdentifierModifier(identifier: identifier))
+    }
+}
+
+struct AccessibilityIdentifierModifier: ViewModifier {
+    let identifier: String?
+
+    func body(content: Content) -> some View {
+        if let identifier {
+            content.accessibilityIdentifier(identifier)
+        } else {
+            content
+        }
     }
 }
 

@@ -1,5 +1,13 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import Combine
+
+// MARK: - Keyboard Direction Enum
+
+enum KeyboardDirection {
+    case up
+    case down
+}
 
 /// A Warp-inspired file browser sidebar for selecting markdown files
 struct FileBrowserView: View {
@@ -10,8 +18,13 @@ struct FileBrowserView: View {
     @State private var expandedDirs: Set<String> = []
     @State private var selectedPath: String?
     @State private var errorMessage: String?
-    @State private var showHiddenFiles: Bool = false
+    @AppStorage("ghostty.fileBrowserShowHidden") private var showHiddenFiles: Bool = false
     @State private var loadGeneration: Int = 0  // Prevents race conditions
+    @AppStorage("ghostty.fileBrowserSearchText") private var searchText: String = ""
+    @State private var selectedItemIndex: Int = -1  // For keyboard navigation
+    @State private var recentFiles: [String] = []  // Persisted across sessions via UserDefaults
+    @AppStorage("ghostty.fileBrowserShowQuickAccess") private var showQuickAccess: Bool = true  // Persisted toggle state for unified accordion
+    @State private var isDropTargetHighlighted = false  // For drag-and-drop visual feedback
 
     /// Effective path - terminal's CWD or fallback to home directory
     private var effectivePath: String {
@@ -21,9 +34,37 @@ struct FileBrowserView: View {
     private var projectName: String {
         return URL(fileURLWithPath: effectivePath).lastPathComponent
     }
+    
+    /// Breadcrumb components from current path
+    private var breadcrumbComponents: [(name: String, path: String)] {
+        let url = URL(fileURLWithPath: effectivePath)
+        var components: [(String, String)] = [("Home", NSHomeDirectory())]
+        
+        guard effectivePath != NSHomeDirectory() else { return components }
+        
+        let pathComponents = url.pathComponents
+        var currentPath = ""
+        
+        for component in pathComponents where component != "/" {
+            currentPath = (currentPath as NSString).appendingPathComponent(component)
+            components.append((component, currentPath))
+        }
+        
+        return components
+    }
+    
+    /// Filtered items based on search text
+    private var filteredItems: [FileItem] {
+        if searchText.isEmpty {
+            return items
+        }
+        return items.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
+            // MARK: - Navigation Section
+            
             // Compact toolbar
             FileBrowserToolbar(
                 showHiddenFiles: $showHiddenFiles,
@@ -32,47 +73,210 @@ struct FileBrowserView: View {
                 canGoUp: canGoUp
             )
             .onChange(of: showHiddenFiles) { _ in loadDirectory() }
+            
+            SectionDivider()
+            
+            // Breadcrumb navigation
+            BreadcrumbBar(components: breadcrumbComponents, onNavigate: { path in
+                rootPath = path
+            })
+            
+            SectionDivider()
+            
+            // MARK: - Quick Access Section (Unified Accordion)
+            
+            DisclosureGroup(isExpanded: $showQuickAccess) {
+                VStack(alignment: .leading, spacing: PanelTheme.spacing8) {
+                    // Search field
+                    VStack(alignment: .leading, spacing: PanelTheme.spacing4) {
+                        Text("Filter")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(Color(PanelTheme.textMuted))
+                            .tracking(0.5)
+                            .padding(.horizontal, PanelTheme.spacing10)
+                        
+                        HStack(spacing: PanelTheme.spacing8) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color(PanelTheme.textMuted))
+                            
+                            TextField("Filter files...", text: $searchText)
+                                .font(.system(size: 12))
+                                .textFieldStyle(.plain)
+                            
+                            if !searchText.isEmpty {
+                                Button(action: { searchText = "" }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(Color(PanelTheme.textMuted))
+                                }
+                                .buttonStyle(.plain)
+                                .help("Clear search")
+                            }
+                        }
+                        .padding(.horizontal, PanelTheme.spacing10)
+                        .padding(.vertical, PanelTheme.spacing8)
+                        .background(Color(PanelTheme.surfaceElevated))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: PanelTheme.radiusSmall, style: .continuous)
+                                .stroke(Color(PanelTheme.borderSubtle), lineWidth: 1)
+                        )
+                    }
+                    
+                    // Recent files (shown only if available)
+                    if !recentFiles.isEmpty {
+                        VStack(alignment: .leading, spacing: PanelTheme.spacing4) {
+                            Text("Recent")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(Color(PanelTheme.textMuted))
+                                .tracking(0.5)
+                                .padding(.horizontal, PanelTheme.spacing10)
+                            
+                            VStack(alignment: .leading, spacing: PanelTheme.spacing4) {
+                                ForEach(Array(recentFiles.prefix(5).enumerated()), id: \.element) { _, filePath in
+                                    RecentFileButton(
+                                        filePath: filePath,
+                                        onSelect: {
+                                            selectedPath = filePath
+                                            addToRecentFiles(filePath)
+                                            onFileSelected(filePath)
+                                        }
+                                    )
+                                }
+                            }
+                            .padding(.horizontal, PanelTheme.spacing10)
+                        }
+                    }
+                }
+                .padding(.vertical, PanelTheme.spacing8)
+            } label: {
+                HStack(spacing: PanelTheme.spacing6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(PanelTheme.textMuted))
+                    
+                    Text("Quick Access")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(PanelTheme.textMuted))
+                    
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, PanelTheme.spacing8)
+            .padding(.vertical, PanelTheme.spacing6)
+            .animation(.easeInOut(duration: PanelTheme.animationNormal), value: showQuickAccess)
+
+            SectionDivider()
+
+            // MARK: - Contents Section
 
             // Project header
             ProjectHeader(name: projectName)
 
-            Rectangle()
+            Capsule()
                 .fill(Color(PanelTheme.border))
                 .frame(height: 1)
+                .padding(.horizontal, PanelTheme.spacing8)
 
             // File tree
             if let error = errorMessage {
                 EmptyStateView(message: error)
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(items) { item in
-                            FileTreeRow(
-                                item: item,
-                                depth: 0,
-                                isExpanded: expandedDirs.contains(item.path),
-                                isSelected: selectedPath == item.path,
-                                expandedDirs: $expandedDirs,
-                                selectedPath: $selectedPath,
-                                onFileSelected: onFileSelected,
-                                showHiddenFiles: showHiddenFiles
-                            )
+                VStack(spacing: 0) {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
+                                    FileTreeRow(
+                                        item: item,
+                                        depth: 0,
+                                        isExpanded: expandedDirs.contains(item.path),
+                                        isSelected: selectedPath == item.path,
+                                        expandedDirs: $expandedDirs,
+                                        selectedPath: $selectedPath,
+                                        onFileSelected: { path in
+                                            selectedPath = path
+                                            addToRecentFiles(path)
+                                            onFileSelected(path)
+                                        },
+                                        showHiddenFiles: showHiddenFiles
+                                    )
+                                    .id(index)
+                                    .onReceive(Just(selectedItemIndex)) { newIndex in
+                                        if newIndex >= 0 && newIndex < filteredItems.count {
+                                            withAnimation(.spring(response: PanelTheme.springResponse, dampingFraction: PanelTheme.springDamping)) {
+                                                proxy.scrollTo(newIndex, anchor: .center)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.vertical, PanelTheme.spacing6)
                         }
+                        .scrollContentBackground(.hidden)
                     }
-                    .padding(.vertical, PanelTheme.spacing6)
                 }
-                .scrollContentBackground(.hidden)
+                .background(
+                    RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
+                        .fill(Color(PanelTheme.background))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
+                        .stroke(
+                            isDropTargetHighlighted
+                                ? Color(PanelTheme.selectionActive)
+                                : Color(PanelTheme.borderSubtle),
+                            lineWidth: isDropTargetHighlighted ? 2 : 1
+                        )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous))
+                .padding(.horizontal, PanelTheme.spacing8)
+                .padding(.vertical, PanelTheme.spacing8)
+                .onDrop(of: [.fileURL], isTargeted: $isDropTargetHighlighted) { providers in
+                    handleFileDrop(providers: providers)
+                }
+            }
+            
+            // Keyboard navigation hint
+            if !filteredItems.isEmpty {
+                Text("↑↓ to navigate • ⏎/Space to select • ⎋ to clear")
+                    .font(.caption2)
+                    .foregroundColor(Color(PanelTheme.textMuted))
+                    .padding(.horizontal, PanelTheme.spacing12)
+                    .padding(.vertical, PanelTheme.spacing4)
             }
         }
         .frame(minWidth: 200)
-        .background(Color(PanelTheme.background))
-        .onAppear { loadDirectory() }
+        .background(
+            RoundedRectangle(cornerRadius: PanelTheme.radiusLarge, style: .continuous)
+                .fill(Color(PanelTheme.background))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: PanelTheme.radiusLarge, style: .continuous)
+                .stroke(Color(PanelTheme.borderSubtle), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusLarge, style: .continuous))
+        .onAppear { 
+            loadDirectory()
+            loadRecentFilesFromStorage()
+        }
         .onChange(of: rootPath) { _ in
             // Clear stale state when directory changes
             expandedDirs.removeAll()
             selectedPath = nil
             loadDirectory()
         }
+        .onChange(of: recentFiles) { _ in
+            saveRecentFilesToStorage()
+        }
+        .onChange(of: showQuickAccess) { _ in
+            // showQuickAccess is already persisted via @AppStorage
+        }
+        .backport.onKeyPress(.upArrow) { _ in handleKeyboardNavigation(direction: .up) }
+        .backport.onKeyPress(.downArrow) { _ in handleKeyboardNavigation(direction: .down) }
+        .backport.onKeyPress(.return) { _ in handleKeyboardSelect() }
+        .backport.onKeyPress(.space) { _ in handleKeyboardSelect() }
+        .backport.onKeyPress(.escape) { _ in handleKeyboardEscape() }
     }
 
     private var canGoUp: Bool {
@@ -86,6 +290,115 @@ struct FileBrowserView: View {
 
     private func openInFinder() {
         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: effectivePath)
+    }
+
+    // MARK: - Keyboard Navigation
+
+    private func handleKeyboardNavigation(direction: KeyboardDirection) -> BackportKeyPressResult {
+        guard !filteredItems.isEmpty else { return .ignored }
+
+        if direction == .up {
+            if selectedItemIndex > 0 {
+                selectedItemIndex -= 1
+            } else if selectedItemIndex == -1 {
+                selectedItemIndex = filteredItems.count - 1
+            }
+        } else if direction == .down {
+            if selectedItemIndex < filteredItems.count - 1 {
+                selectedItemIndex += 1
+            } else if selectedItemIndex == -1 {
+                selectedItemIndex = 0
+            }
+        }
+
+        return .handled
+    }
+
+    private func handleKeyboardSelect() -> BackportKeyPressResult {
+        guard selectedItemIndex >= 0, selectedItemIndex < filteredItems.count else {
+            return .ignored
+        }
+
+        let item = filteredItems[selectedItemIndex]
+
+        if item.isDirectory {
+            // Toggle expansion for directories
+            if expandedDirs.contains(item.path) {
+                expandedDirs.remove(item.path)
+            } else {
+                expandedDirs.insert(item.path)
+            }
+        } else {
+            // Select file
+            selectedPath = item.path
+            addToRecentFiles(item.path)
+            onFileSelected(item.path)
+        }
+
+        return .handled
+    }
+    
+    /// Add file to recent files (persisted, max 10 entries)
+    private func addToRecentFiles(_ filePath: String) {
+        // Remove if already exists, then insert at beginning
+        recentFiles.removeAll { $0 == filePath }
+        recentFiles.insert(filePath, at: 0)
+        
+        // Keep max 10 recent files
+        if recentFiles.count > 10 {
+            recentFiles = Array(recentFiles.prefix(10))
+        }
+    }
+
+    /// Save recent files to UserDefaults
+    private func saveRecentFilesToStorage() {
+        let defaults = UserDefaults.standard
+        defaults.set(recentFiles, forKey: "ghostty.fileBrowserRecentFiles")
+    }
+
+    /// Load recent files from UserDefaults
+    private func loadRecentFilesFromStorage() {
+        let defaults = UserDefaults.standard
+        if let savedFiles = defaults.array(forKey: "ghostty.fileBrowserRecentFiles") as? [String] {
+            recentFiles = savedFiles
+        }
+    }
+
+    private func handleKeyboardEscape() -> BackportKeyPressResult {
+        // Clear selection on Escape
+        selectedItemIndex = -1
+        selectedPath = nil
+        return .handled
+    }
+
+    // MARK: - Drag and Drop
+
+    /// Handle files dropped from Finder
+    private func handleFileDrop(providers: [NSItemProvider]) -> Bool {
+        var accepted = false
+
+        for provider in providers where provider.canLoadObject(ofClass: URL.self) {
+            accepted = true
+            provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url = url else { return }
+
+                DispatchQueue.main.async {
+                    if url.hasDirectoryPath {
+                        rootPath = url.path
+                        return
+                    }
+
+                    let fileName = url.lastPathComponent
+                    if FileItemProcessor.isMarkdownFile(fileName) {
+                        selectedPath = url.path
+                        addToRecentFiles(url.path)
+                        onFileSelected(url.path)
+                    }
+                }
+            }
+        }
+
+        return accepted
     }
 
     /// Load directory contents on background queue to prevent UI blocking
@@ -116,6 +429,18 @@ struct FileBrowserView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Section Divider
+
+struct SectionDivider: View {
+    var body: some View {
+        Capsule()
+            .fill(Color(PanelTheme.borderSubtle))
+            .frame(height: 1)
+            .padding(.vertical, PanelTheme.spacing6)
+            .padding(.horizontal, PanelTheme.spacing8)
     }
 }
 
@@ -153,7 +478,15 @@ struct FileBrowserToolbar: View {
         }
         .padding(.horizontal, PanelTheme.spacing12)
         .padding(.vertical, PanelTheme.spacing8)
-        .background(Color(PanelTheme.surfaceElevated))
+        .background(
+            RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
+                .fill(Color(PanelTheme.surfaceElevated))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
+                .stroke(Color(PanelTheme.borderSubtle), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous))
     }
 }
 
@@ -170,10 +503,94 @@ struct ToolbarIconButton: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(Color(isHovered ? PanelTheme.iconHover : PanelTheme.iconDefault))
                 .frame(width: 24, height: 24)
-                .contentShape(Rectangle())
+                .background(isHovered ? Color(PanelTheme.surfaceHover) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(tooltip)
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Breadcrumb Bar
+
+struct BreadcrumbBar: View {
+    let components: [(name: String, path: String)]
+    let onNavigate: (String) -> Void
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: PanelTheme.spacing4) {
+                ForEach(Array(components.enumerated()), id: \.offset) { index, component in
+                    HStack(spacing: PanelTheme.spacing4) {
+                        Button(action: { onNavigate(component.path) }) {
+                            Text(component.name)
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(PanelTheme.textMuted))
+                                .lineLimit(1)
+                        }
+                        .buttonStyle(.plain)
+                        
+                        if index < components.count - 1 {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(Color(PanelTheme.textMuted))
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, PanelTheme.spacing10)
+            .padding(.vertical, PanelTheme.spacing6)
+        }
+        .background(Color(PanelTheme.surfaceElevated).opacity(0.5))
+    }
+}
+
+// MARK: - Recent File Button
+
+struct RecentFileButton: View {
+    let filePath: String
+    let onSelect: () -> Void
+    
+    @State private var isHovered = false
+    
+    private var fileName: String {
+        URL(fileURLWithPath: filePath).lastPathComponent
+    }
+    
+    private var parentPath: String {
+        URL(fileURLWithPath: filePath).deletingLastPathComponent().path
+    }
+    
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: PanelTheme.spacing6) {
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(PanelTheme.markdownIcon))
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(fileName)
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(PanelTheme.textPrimary))
+                        .lineLimit(1)
+                    
+                    Text(parentPath)
+                        .font(.system(size: 9))
+                        .foregroundColor(Color(PanelTheme.textMuted))
+                        .lineLimit(1)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, PanelTheme.spacing8)
+            .padding(.vertical, PanelTheme.spacing6)
+            .background(isHovered ? Color(PanelTheme.surfaceHover) : Color.clear)
+            .cornerRadius(PanelTheme.radiusSmall)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
         .onHover { isHovered = $0 }
     }
 }
@@ -198,7 +615,15 @@ struct ProjectHeader: View {
         }
         .padding(.horizontal, PanelTheme.spacing12)
         .padding(.vertical, PanelTheme.spacing10)
-        .background(Color(PanelTheme.surfaceElevated))
+        .background(
+            RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
+                .fill(Color(PanelTheme.surfaceElevated))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
+                .stroke(Color(PanelTheme.borderSubtle), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous))
     }
 }
 
@@ -219,7 +644,18 @@ struct EmptyStateView: View {
                 .multilineTextAlignment(.center)
             Spacer()
         }
-        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(PanelTheme.spacing12)
+        .background(
+            RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
+                .fill(Color(PanelTheme.surfaceElevated))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
+                .stroke(Color(PanelTheme.borderSubtle), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous))
+        .padding(PanelTheme.spacing8)
     }
 }
 
@@ -239,6 +675,11 @@ struct FileTreeRow: View {
     @State private var children: [FileItem]?
 
     private let indentWidth: CGFloat = 16
+    private let maxIndentLevels: CGFloat = 6
+
+    private var indentOffset: CGFloat {
+        min(CGFloat(depth), maxIndentLevels) * indentWidth + PanelTheme.spacing8
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -246,7 +687,7 @@ struct FileTreeRow: View {
             HStack(spacing: 0) {
                 // Indentation
                 Spacer()
-                    .frame(width: CGFloat(depth) * indentWidth + PanelTheme.spacing8)
+                    .frame(width: indentOffset)
 
                 // Chevron for directories
                 if item.isDirectory {
@@ -279,9 +720,9 @@ struct FileTreeRow: View {
             .padding(.vertical, PanelTheme.spacing4)
             .padding(.trailing, PanelTheme.spacing8)
             .background(rowBackground)
-            .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall))
+            .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall, style: .continuous))
             .padding(.horizontal, PanelTheme.spacing4)
-            .contentShape(Rectangle())
+            .contentShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall, style: .continuous))
             .onTapGesture {
                 if item.isDirectory {
                     toggleExpand()

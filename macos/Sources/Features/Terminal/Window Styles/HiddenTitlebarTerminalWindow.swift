@@ -55,10 +55,10 @@ class HiddenTitlebarTerminalWindow: TerminalWindow {
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
 
-        // Hide the traffic lights (window control buttons)
-        standardWindowButton(.closeButton)?.isHidden = true
-        standardWindowButton(.miniaturizeButton)?.isHidden = true
-        standardWindowButton(.zoomButton)?.isHidden = true
+        let shouldHideButtons = derivedConfig.macosWindowButtons == .hidden
+        standardWindowButton(.closeButton)?.isHidden = shouldHideButtons
+        standardWindowButton(.miniaturizeButton)?.isHidden = shouldHideButtons
+        standardWindowButton(.zoomButton)?.isHidden = shouldHideButtons
 
         // Disallow tabbing if the titlebar is hidden, since that will (should) also hide the tab bar.
         tabbingMode = .disallowed
@@ -68,7 +68,7 @@ class HiddenTitlebarTerminalWindow: TerminalWindow {
         // it is gone forever.
         if let themeFrame = contentView?.superview,
            let titleBarContainer = themeFrame.firstDescendant(withClassName: "NSTitlebarContainerView") {
-            titleBarContainer.isHidden = true
+            titleBarContainer.isHidden = shouldHideButtons
         }
     }
 

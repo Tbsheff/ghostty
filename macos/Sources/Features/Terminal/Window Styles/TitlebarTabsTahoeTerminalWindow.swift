@@ -15,10 +15,13 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             viewModel: viewModel,
             icon: "sidebar.left",
             isActiveKeyPath: \.fileBrowserVisible,
+            accessibilityIdentifier: "fileBrowser.toggle",
             action: { [weak self] in
                 self?.terminalController?.toggleFileBrowser(nil)
             }
         ))
+        view.setAccessibilityIdentifier("fileBrowser.toggle")
+        view.setAccessibilityRole(.button)
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -29,10 +32,13 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             viewModel: viewModel,
             icon: "doc.richtext",
             isActiveKeyPath: \.markdownVisible,
+            accessibilityIdentifier: "markdown.toggle",
             action: { [weak self] in
                 self?.terminalController?.toggleMarkdownPreview(nil)
             }
         ))
+        view.setAccessibilityIdentifier("markdown.toggle")
+        view.setAccessibilityRole(.button)
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -334,11 +340,11 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
     // MARK: NSToolbarDelegate
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        return [.title, .flexibleSpace, .space, .fileBrowserToggle, .markdownToggle]
+        return [.title, .flexibleSpace, .space]
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        return [.fileBrowserToggle, .flexibleSpace, .title, .flexibleSpace, .markdownToggle]
+        return [.flexibleSpace, .title, .flexibleSpace]
     }
 
     func toolbar(_ toolbar: NSToolbar,
@@ -363,12 +369,17 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             let hostingView = NSHostingView(rootView: ToolbarToggleButton(
                 icon: "sidebar.left",
                 isActive: viewModel.fileBrowserVisible,
+                accessibilityIdentifier: "fileBrowser.toggle",
                 action: { [weak self] in
                     self?.terminalController?.toggleFileBrowser(nil)
                 }
             ))
             hostingView.frame = NSRect(x: 0, y: 0, width: 28, height: 22)
+            hostingView.setAccessibilityIdentifier("fileBrowser.toggle")
+            hostingView.setAccessibilityRole(.button)
             item.view = hostingView
+            item.view?.setAccessibilityIdentifier("fileBrowser.toggle")
+            item.view?.setAccessibilityRole(.button)
             item.isBordered = false
             item.visibilityPriority = .high
             item.toolTip = "Toggle File Browser (⌘B)"
@@ -380,12 +391,17 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             let hostingView = NSHostingView(rootView: ToolbarToggleButton(
                 icon: "doc.richtext",
                 isActive: viewModel.markdownVisible,
+                accessibilityIdentifier: "markdown.toggle",
                 action: { [weak self] in
                     self?.terminalController?.toggleMarkdownPreview(nil)
                 }
             ))
             hostingView.frame = NSRect(x: 0, y: 0, width: 28, height: 22)
+            hostingView.setAccessibilityIdentifier("markdown.toggle")
+            hostingView.setAccessibilityRole(.button)
             item.view = hostingView
+            item.view?.setAccessibilityIdentifier("markdown.toggle")
+            item.view?.setAccessibilityRole(.button)
             item.isBordered = false
             item.visibilityPriority = .high
             item.toolTip = "Toggle Markdown Preview (⇧⌘M)"
@@ -464,25 +480,28 @@ extension TitlebarTabsTahoeTerminalWindow {
         private let staticIsActive: Bool?
 
         let icon: String
+        let accessibilityIdentifier: String?
         let action: () -> Void
 
         @State private var isHovered = false
 
         /// Reactive initializer - updates when viewModel changes
-        init(viewModel: ViewModel, icon: String, isActiveKeyPath: KeyPath<ViewModel, Bool>, action: @escaping () -> Void) {
+        init(viewModel: ViewModel, icon: String, isActiveKeyPath: KeyPath<ViewModel, Bool>, accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
             self.viewModel = viewModel
             self.icon = icon
             self.isActiveKeyPath = isActiveKeyPath
             self.staticIsActive = nil
+            self.accessibilityIdentifier = accessibilityIdentifier
             self.action = action
         }
 
         /// Static initializer - for toolbar items that don't need reactive updates
-        init(icon: String, isActive: Bool, action: @escaping () -> Void) {
+        init(icon: String, isActive: Bool, accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
             self.viewModel = ViewModel()
             self.icon = icon
             self.isActiveKeyPath = nil
             self.staticIsActive = isActive
+            self.accessibilityIdentifier = accessibilityIdentifier
             self.action = action
         }
 
@@ -500,6 +519,7 @@ extension TitlebarTabsTahoeTerminalWindow {
                     .foregroundColor(buttonColor)
             }
             .buttonStyle(.plain)
+            .modifier(AccessibilityIdentifierModifier(identifier: accessibilityIdentifier))
             .frame(width: 28, height: 22)
             .background(backgroundColor)
             .clipShape(RoundedRectangle(cornerRadius: 5))

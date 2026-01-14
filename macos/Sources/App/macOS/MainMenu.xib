@@ -92,9 +92,19 @@
                                 </connections>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="VOq-y0-SEH"/>
-                            <menuItem title="Preferences…" keyEquivalent="," id="BOF-NM-1cW">
+                            <menuItem title="Settings…" keyEquivalent="," id="BOF-NM-1cW">
+                                <modifierMask key="keyEquivalentModifierMask" command="YES"/>
                                 <connections>
-                                    <action selector="openConfig:" target="bbz-4X-AYv" id="X65-fg-iWU"/>
+                                    <action selector="showSettings:" target="bbz-4X-AYv" id="X65-fg-iWU"/>
+                                </connections>
+                                <userDefinedRuntimeAttributes>
+                                    <userDefinedRuntimeAttribute type="string" keyPath="accessibilityLabel" value="Open Ghostty Settings to configure fonts, appearance, and behavior"/>
+                                </userDefinedRuntimeAttributes>
+                            </menuItem>
+                            <menuItem title="Open Configuration File…" keyEquivalent="," id="CFG-OP-1cW">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="openConfig:" target="bbz-4X-AYv" id="CFG-fg-iWU"/>
                                 </connections>
                             </menuItem>
                             <menuItem title="Reload Configuration" id="KKH-XX-5py">
@@ -369,12 +379,18 @@
                                 <connections>
                                     <action selector="toggleFileBrowser:" target="-1" id="mkd-fb-act"/>
                                 </connections>
+                                <userDefinedRuntimeAttributes>
+                                    <userDefinedRuntimeAttribute type="string" keyPath="accessibilityLabel" value="Toggle the file browser sidebar to browse and select files"/>
+                                </userDefinedRuntimeAttributes>
                             </menuItem>
                             <menuItem title="Toggle Markdown Preview" keyEquivalent="M" id="mkd-pnl-1">
                                 <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
                                 <connections>
                                     <action selector="toggleMarkdownPreview:" target="-1" id="mkd-act-1"/>
                                 </connections>
+                                <userDefinedRuntimeAttributes>
+                                    <userDefinedRuntimeAttribute type="string" keyPath="accessibilityLabel" value="Toggle the markdown preview panel"/>
+                                </userDefinedRuntimeAttributes>
                             </menuItem>
                         </items>
                     </menu>

@@ -122,7 +122,7 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
     var leftMinWidth: CGFloat = 180
     var leftMaxWidth: CGFloat = 400
     var rightMinWidth: CGFloat = 280
-    var rightMaxWidthRatio: CGFloat = 0.6
+    var rightMaxWidthRatio: CGFloat = 0.5
 
     /// Current widths (for restoration)
     var leftWidth: CGFloat = 240
@@ -135,11 +135,18 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
     /// Track if we're currently animating to prevent feedback loops
     private var isAnimating = false
 
+    /// Track pending visibility changes while animating
+    private var pendingLeftVisible: Bool?
+    private var pendingRightVisible: Bool?
+
     /// Track if we're currently dragging dividers to show preview overlay
     private var isDraggingDivider = false
 
     /// Divider preview overlay view
     private let dividerPreviewOverlay = NSView()
+
+    /// Track initial layout so we can apply visibility once bounds are known
+    private var didInitialLayout = false
     
     /// Minimum width for center pane to remain functional
     private let minCenterWidth: CGFloat = 150
@@ -198,11 +205,26 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
             container.wantsLayer = true
         }
 
-        // Add center container (always visible)
+        // Add containers in stable order (left | center | right)
+        splitView.addArrangedSubview(leftContainer)
         splitView.addArrangedSubview(centerContainer)
+        splitView.addArrangedSubview(rightContainer)
 
         // Set holding priorities - center should be most flexible
-        splitView.setHoldingPriority(.defaultLow, forSubviewAt: 0)
+        splitView.setHoldingPriority(.defaultHigh, forSubviewAt: 0)
+        splitView.setHoldingPriority(.defaultLow, forSubviewAt: 1)
+        splitView.setHoldingPriority(.defaultHigh, forSubviewAt: 2)
+
+        // Start hidden until visibility is applied after layout
+        leftContainer.isHidden = true
+        rightContainer.isHidden = true
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        guard !didInitialLayout else { return }
+        didInitialLayout = true
+        applyVisibility(animated: false)
     }
 
     // MARK: - Content Management
@@ -276,48 +298,67 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
 
     func setLeftVisible(_ visible: Bool, animated: Bool) {
         guard visible != isLeftVisible else { return }
+        if isAnimating {
+            pendingLeftVisible = visible
+            return
+        }
         isLeftVisible = visible
         userPreferredLeftVisible = visible  // Track user preference
         autoCollapsedLeft = false
 
         if animated && !isAnimating {
-            animatePanelVisibility(left: visible)
+            isAnimating = true
+            applyVisibility(animated: true)
         } else {
-            updateSplitViewArrangement()  // Apply immediately if animating or not animated
+            applyVisibility(animated: false)
         }
     }
 
     func setRightVisible(_ visible: Bool, animated: Bool) {
         guard visible != isRightVisible else { return }
+        if isAnimating {
+            pendingRightVisible = visible
+            return
+        }
         isRightVisible = visible
         userPreferredRightVisible = visible  // Track user preference
         autoCollapsedRight = false
 
         if animated && !isAnimating {
-            animatePanelVisibility(right: visible)
+            isAnimating = true
+            applyVisibility(animated: true)
         } else {
-            updateSplitViewArrangement()  // Apply immediately if animating or not animated
+            applyVisibility(animated: false)
         }
     }
 
     // MARK: - Adaptive Panel Sizing
 
+    private func clampedLeftWidth(totalWidth: CGFloat) -> CGFloat {
+        min(leftWidth, leftMaxWidth)
+    }
+
+    private func clampedRightWidth(totalWidth: CGFloat) -> CGFloat {
+        let maxRightWidth = max(rightMinWidth, totalWidth * rightMaxWidthRatio)
+        return min(rightWidth, maxRightWidth)
+    }
+
     /// Calculate dynamic breakpoint for left sidebar based on user-preferred width
     /// Collapses when: totalWidth < (leftWidth + minCenterWidth + rightWidth if rightVisible)
-    private func calculateLeftBreakpoint() -> CGFloat {
-        var requiredWidth = leftWidth + minCenterWidth
-        if isRightVisible {
-            requiredWidth += rightWidth
+    private func calculateLeftBreakpoint(totalWidth: CGFloat, rightVisible: Bool) -> CGFloat {
+        var requiredWidth = clampedLeftWidth(totalWidth: totalWidth) + minCenterWidth
+        if rightVisible {
+            requiredWidth += clampedRightWidth(totalWidth: totalWidth)
         }
         return requiredWidth
     }
     
     /// Calculate dynamic breakpoint for right sidebar based on user-preferred width
     /// Collapses when: totalWidth < (leftWidth if leftVisible + centerWidth + rightWidth)
-    private func calculateRightBreakpoint() -> CGFloat {
-        var requiredWidth = rightWidth + minCenterWidth
-        if isLeftVisible {
-            requiredWidth += leftWidth
+    private func calculateRightBreakpoint(totalWidth: CGFloat, leftVisible: Bool) -> CGFloat {
+        var requiredWidth = clampedRightWidth(totalWidth: totalWidth) + minCenterWidth
+        if leftVisible {
+            requiredWidth += clampedLeftWidth(totalWidth: totalWidth)
         }
         return requiredWidth
     }
@@ -326,15 +367,13 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
     /// Breakpoints are calculated from user-preferred widths, ensuring responsive behavior
     /// Preserves user preference when width returns to adequate range
     private func checkAndAutoCollapse() {
+        guard !isAnimating else { return }
         let totalWidth = splitView.bounds.width
         
-        // Calculate dynamic breakpoints based on current preferred widths
-        let leftBreakpoint = calculateLeftBreakpoint()
-        let rightBreakpoint = calculateRightBreakpoint()
-        
-        // Determine auto-collapse state based on dynamic breakpoints
-        let shouldCollapseRight = totalWidth < rightBreakpoint
-        let shouldCollapseLeft = totalWidth < leftBreakpoint
+        // Determine right collapse first, then recompute left with predicted visibility.
+        let shouldCollapseRight = totalWidth < calculateRightBreakpoint(totalWidth: totalWidth, leftVisible: isLeftVisible)
+        let rightWillBeVisible = isRightVisible && !shouldCollapseRight
+        let shouldCollapseLeft = totalWidth < calculateLeftBreakpoint(totalWidth: totalWidth, rightVisible: rightWillBeVisible)
         
         var needsUpdate = false
         
@@ -363,73 +402,101 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
         }
         
         if needsUpdate {
-            updateSplitViewArrangement()
+            applyVisibility(animated: false)
         }
     }
 
-    private func updateSplitViewArrangement() {
-        // Remove all subviews
-        for subview in splitView.arrangedSubviews {
-            splitView.removeArrangedSubview(subview)
-            subview.removeFromSuperview()
+    private func applyVisibility(animated: Bool) {
+        guard splitView.bounds.width > 1 else {
+            if animated {
+                isAnimating = false
+            }
+            return
         }
 
-        // Add in order based on visibility
-        var index = 0
+        let totalWidth = splitView.bounds.width
+        let clampedLeft = clampedLeftWidth(totalWidth: totalWidth)
+        let clampedRight = clampedRightWidth(totalWidth: totalWidth)
+        if leftWidth != clampedLeft {
+            leftWidth = clampedLeft
+        }
+        if rightWidth != clampedRight {
+            rightWidth = clampedRight
+        }
+        let leftTargetWidth = isLeftVisible ? clampedLeft : 0
+        let rightTargetWidth = isRightVisible ? clampedRight : 0
 
         if isLeftVisible {
-            splitView.insertArrangedSubview(leftContainer, at: index)
-            splitView.setHoldingPriority(.defaultHigh, forSubviewAt: index)
-            index += 1
-        }
-
-        splitView.insertArrangedSubview(centerContainer, at: index)
-        splitView.setHoldingPriority(.defaultLow, forSubviewAt: index)
-        index += 1
-
-        if isRightVisible {
-            splitView.insertArrangedSubview(rightContainer, at: index)
-            splitView.setHoldingPriority(.defaultHigh, forSubviewAt: index)
-        }
-
-        // Restore widths
-        if isLeftVisible {
-            leftContainer.frame.size.width = leftWidth
+            leftContainer.isHidden = false
         }
         if isRightVisible {
-            rightContainer.frame.size.width = rightWidth
+            rightContainer.isHidden = false
         }
 
-        splitView.adjustSubviews()
-    }
-    
-    /// Animate panel visibility changes with smooth transitions
-    private func updateSplitViewArrangementWithAnimation() {
-        CATransaction.begin()
-        CATransaction.setAnimationDuration(0.25)
-        CATransaction.setCompletionBlock { [weak self] in
-            self?.splitView.needsLayout = true
+        let maxLeftDivider = max(0, totalWidth - minCenterWidth - rightTargetWidth)
+        let leftDivider = min(leftTargetWidth, maxLeftDivider)
+
+        let preferredRightDivider = totalWidth - rightTargetWidth
+        let minRightDivider = leftDivider + minCenterWidth
+        let rightDivider = min(max(preferredRightDivider, minRightDivider), totalWidth)
+
+        let applyPositions = {
+            self.splitView.setPosition(leftDivider, ofDividerAt: 0)
+            self.splitView.setPosition(rightDivider, ofDividerAt: 1)
+            self.splitView.adjustSubviews()
         }
-        
-        updateSplitViewArrangement()
-        
-        CATransaction.commit()
+
+        if animated {
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = PanelTheme.animationNormal
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                context.allowsImplicitAnimation = true
+
+                self.splitView.animator().setPosition(leftDivider, ofDividerAt: 0)
+                self.splitView.animator().setPosition(rightDivider, ofDividerAt: 1)
+            }, completionHandler: { [weak self] in
+                guard let self else { return }
+                if !self.isLeftVisible {
+                    self.leftContainer.isHidden = true
+                }
+                if !self.isRightVisible {
+                    self.rightContainer.isHidden = true
+                }
+                self.isAnimating = false
+                self.splitView.adjustSubviews()
+                self.applyPendingVisibilityIfNeeded()
+            })
+        } else {
+            applyPositions()
+            if !isLeftVisible {
+                leftContainer.isHidden = true
+            }
+            if !isRightVisible {
+                rightContainer.isHidden = true
+            }
+            applyPendingVisibilityIfNeeded()
+        }
     }
 
-    private func animatePanelVisibility(left: Bool? = nil, right: Bool? = nil) {
+    private func applyPendingVisibilityIfNeeded() {
         guard !isAnimating else { return }
+        guard pendingLeftVisible != nil || pendingRightVisible != nil else { return }
+
+        if let pendingLeftVisible, pendingLeftVisible != isLeftVisible {
+            isLeftVisible = pendingLeftVisible
+            userPreferredLeftVisible = pendingLeftVisible
+            autoCollapsedLeft = false
+        }
+        if let pendingRightVisible, pendingRightVisible != isRightVisible {
+            isRightVisible = pendingRightVisible
+            userPreferredRightVisible = pendingRightVisible
+            autoCollapsedRight = false
+        }
+
+        pendingLeftVisible = nil
+        pendingRightVisible = nil
         isAnimating = true
-
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.25
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            context.allowsImplicitAnimation = true
-
-            updateSplitViewArrangementWithAnimation()
-
-        }, completionHandler: { [weak self] in
-            self?.isAnimating = false
-        })
+        applyVisibility(animated: true)
     }
 
     // MARK: - Divider Preview Overlay
@@ -459,16 +526,14 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
         // Show divider preview during dragging
         showDividerPreview(at: proposedMinimumPosition, forDividerAt: dividerIndex)
 
-        // Determine which divider this is based on current arrangement
-        if isLeftVisible && dividerIndex == 0 {
-            // Left panel divider - enforce minimum left width
-            return leftMinWidth
-        } else if isLeftVisible && isRightVisible && dividerIndex == 1 {
+        let currentLeftWidth = leftContainer.isHidden ? 0 : leftContainer.frame.width
+
+        if dividerIndex == 0 {
+            // Left panel divider - enforce minimum left width when visible
+            return isLeftVisible ? leftMinWidth : 0
+        } else if dividerIndex == 1 {
             // Right panel divider - enforce center has some space
-            return leftWidth + 100  // At least 100px for center
-        } else if !isLeftVisible && isRightVisible && dividerIndex == 0 {
-            // Only right panel visible - center needs minimum space
-            return 100
+            return currentLeftWidth + minCenterWidth
         }
 
         return proposedMinimumPosition
@@ -480,12 +545,14 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
 
         let totalWidth = splitView.bounds.width
 
-        if isLeftVisible && dividerIndex == 0 {
+        let currentRightMinWidth: CGFloat = isRightVisible ? rightMinWidth : 0
+
+        if dividerIndex == 0 {
             // Left panel divider - enforce maximum left width
-            return min(leftMaxWidth, totalWidth * 0.4)
-        } else if isRightVisible {
+            return isLeftVisible ? min(leftMaxWidth, totalWidth - minCenterWidth - currentRightMinWidth) : 0
+        } else if dividerIndex == 1 {
             // Right panel divider - enforce minimum right width
-            return totalWidth - rightMinWidth
+            return totalWidth - currentRightMinWidth
         }
 
         return proposedMaximumPosition
@@ -532,7 +599,12 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
     }
 
     func splitView(_ splitView: NSSplitView, shouldHideDividerAt dividerIndex: Int) -> Bool {
-        // Never hide dividers when panels are visible
+        if dividerIndex == 0 {
+            return !isLeftVisible
+        }
+        if dividerIndex == 1 {
+            return !isRightVisible
+        }
         return false
     }
 
@@ -569,6 +641,6 @@ extension NativeSplitView {
         self.leftMinWidth = 180
         self.leftMaxWidth = 400
         self.rightMinWidth = 280
-        self.rightMaxWidthRatio = 0.6
+        self.rightMaxWidthRatio = 0.5
     }
 }

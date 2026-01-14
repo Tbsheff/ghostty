@@ -253,6 +253,32 @@ struct MarkdownParser {
         return blocks
     }
 
+    /// Detect if content looks like a full HTML document rather than markdown.
+    static func looksLikeHTMLDocument(_ text: String) -> Bool {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                continue
+            }
+            let lower = trimmed.lowercased()
+            if lower.hasPrefix("```") {
+                return false
+            }
+            if lower.hasPrefix("<!doctype html") ||
+                lower.hasPrefix("<html") ||
+                lower.hasPrefix("<head") ||
+                lower.hasPrefix("<body") {
+                return true
+            }
+            if lower.hasPrefix("<meta") && (lower.contains("charset") || lower.contains("content-security-policy")) {
+                return true
+            }
+            return false
+        }
+        return false
+    }
+
     /// Parse inline markdown elements (bold, italic, code, links)
     /// Uses cached NSRegularExpression patterns for efficiency
     static func parseInline(_ text: String) -> InlineContent {
@@ -676,7 +702,7 @@ struct NativeMarkdownView: View {
             .background(theme.background)
             .onChange(of: scrollTarget) { targetIndex in
                 if let index = targetIndex {
-                    withAnimation(.easeOut(duration: 0.3)) {
+                    withAnimation(.easeOut(duration: 0.35)) {
                         proxy.scrollTo(index, anchor: .top)
                     }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {

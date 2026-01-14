@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 import WebKit
 
 // MARK: - Mermaid Block View
@@ -165,58 +166,35 @@ struct MermaidView: NSViewRepresentable {
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
 
-        let html = """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
+        let cachedScript = MermaidScriptCache.cachedScript()
+        let mermaidScriptTag = cachedScript.map { "<script>\($0)</script>" }
+        let html = makeHTML(escapedCode: escapedCode, mermaidScriptTag: mermaidScriptTag)
+
+        webView.loadHTMLString(html, baseURL: nil)
+
+        if cachedScript == nil {
+            MermaidScriptCache.fetchIfNeeded { script in
+                guard let script = script else {
+                    loadFailed = true
+                    return
                 }
-                html, body {
-                    background: transparent;
-                    overflow: hidden;
-                }
-                #container {
-                    display: flex;
-                    justify-content: center;
-                    align-items: flex-start;
-                    min-height: 100px;
-                }
-                .mermaid {
-                    background: transparent;
-                }
-                .mermaid svg {
-                    max-width: 100%;
-                    height: auto;
-                }
-                #error {
-                    color: #FF453A;
-                    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-                    font-size: 13px;
-                    padding: 16px;
-                    display: none;
-                }
-                #loading {
-                    color: \(textColor);
-                    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-                    font-size: 13px;
-                    padding: 16px;
-                    opacity: 0.6;
-                }
-            </style>
-        </head>
-        <body>
-            <div id="loading">Loading diagram...</div>
-            <div id="error"></div>
-            <div id="container">
-                <pre class="mermaid" id="mermaid-diagram">\(escapedCode)</pre>
-            </div>
-            <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+                let refreshedHTML = makeHTML(
+                    escapedCode: escapedCode,
+                    mermaidScriptTag: "<script>\(script)</script>"
+                )
+                webView.loadHTMLString(refreshedHTML, baseURL: nil)
+            }
+        }
+    }
+
+    private func makeHTML(escapedCode: String, mermaidScriptTag: String?) -> String {
+        let scriptTag = mermaidScriptTag ?? ""
+        let initScript: String
+
+        if mermaidScriptTag == nil {
+            initScript = ""
+        } else {
+            initScript = """
             <script>
                 let loadTimeout = setTimeout(function() {
                     document.getElementById('loading').style.display = 'none';
@@ -289,11 +267,67 @@ struct MermaidView: NSViewRepresentable {
                 // Handle window resize
                 window.addEventListener('resize', reportHeight);
             </script>
+            """
+        }
+
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                html, body {
+                    background: transparent;
+                    overflow: hidden;
+                }
+                #container {
+                    display: flex;
+                    justify-content: center;
+                    align-items: flex-start;
+                    min-height: 100px;
+                }
+                .mermaid {
+                    background: transparent;
+                }
+                .mermaid svg {
+                    max-width: 100%;
+                    height: auto;
+                }
+                #error {
+                    color: #FF453A;
+                    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: 13px;
+                    padding: 16px;
+                    display: none;
+                }
+                #loading {
+                    color: \(textColor);
+                    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: 13px;
+                    padding: 16px;
+                    opacity: 0.6;
+                }
+            </style>
+        </head>
+        <body>
+            <div id="loading">Loading diagram...</div>
+            <div id="error"></div>
+            <div id="container">
+                <pre class="mermaid" id="mermaid-diagram">\(escapedCode)</pre>
+            </div>
+            \(scriptTag)
+            \(initScript)
         </body>
         </html>
         """
 
-        webView.loadHTMLString(html, baseURL: nil)
+        return html
     }
 
     // MARK: - Coordinator
@@ -315,7 +349,9 @@ struct MermaidView: NSViewRepresentable {
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "heightHandler", let height = message.body as? CGFloat {
                 DispatchQueue.main.async {
-                    self.parent.height = max(height + 20, 100) // Add padding
+                    withAnimation(.easeOut(duration: PanelTheme.animationNormal)) {
+                        self.parent.height = max(height + 20, 100) // Add padding
+                    }
                 }
             } else if message.name == "errorHandler" {
                 DispatchQueue.main.async {
@@ -334,6 +370,67 @@ struct MermaidView: NSViewRepresentable {
             DispatchQueue.main.async {
                 self.parent.loadFailed = true
             }
+        }
+    }
+}
+
+// MARK: - Mermaid Script Cache
+
+private enum MermaidScriptCache {
+    static let cacheKey = "ghostty.mermaidScript.v10"
+    static let scriptURL = URL(string: "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js")!
+    static let queue = DispatchQueue(label: "ghostty.mermaidScriptCache")
+    private static var inMemory: String?
+    private static var isFetching = false
+    private static var pending: [(String?) -> Void] = []
+
+    static func cachedScript() -> String? {
+        if let inMemory {
+            return inMemory
+        }
+        if let cached = UserDefaults.standard.string(forKey: cacheKey), !cached.isEmpty {
+            inMemory = cached
+            return cached
+        }
+        return nil
+    }
+
+    static func fetchIfNeeded(completion: @escaping (String?) -> Void) {
+        if let cached = cachedScript() {
+            completion(cached)
+            return
+        }
+
+        queue.async {
+            pending.append(completion)
+
+            if isFetching {
+                return
+            }
+
+            isFetching = true
+            let task = URLSession.shared.dataTask(with: scriptURL) { data, _, _ in
+                let script: String?
+                if let data, let loaded = String(data: data, encoding: .utf8), !loaded.isEmpty {
+                    script = loaded
+                    queue.async {
+                        inMemory = loaded
+                        UserDefaults.standard.set(loaded, forKey: cacheKey)
+                    }
+                } else {
+                    script = nil
+                }
+
+                queue.async {
+                    isFetching = false
+                    let completions = pending
+                    pending.removeAll()
+                    DispatchQueue.main.async {
+                        completions.forEach { $0(script) }
+                    }
+                }
+            }
+            task.resume()
         }
     }
 }

@@ -36,11 +36,31 @@ struct MarkdownPanelHeader: View {
 
     @State private var refreshHovered = false
     @State private var closeHovered = false
+    @State private var revealHovered = false
+    @State private var copyPathHovered = false
+    @State private var showCopiedFeedback = false
 
     private var breadcrumbs: [String] {
         guard let path = filePath else { return ["Preview"] }
         let components = path.split(separator: "/").suffix(3)
         return components.map(String.init)
+    }
+
+    private func revealInFinder() {
+        guard let path = filePath else { return }
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: (path as NSString).deletingLastPathComponent)
+    }
+
+    private func copyPathToClipboard() {
+        guard let path = filePath else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(path, forType: .string)
+        
+        // Visual feedback
+        showCopiedFeedback = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            showCopiedFeedback = false
+        }
     }
 
     var body: some View {
@@ -65,6 +85,33 @@ struct MarkdownPanelHeader: View {
 
             // Actions
             HStack(spacing: PanelTheme.spacing4) {
+                // Contextual actions (only show when filePath is available)
+                if filePath != nil {
+                    Button(action: revealInFinder) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color(revealHovered ? PanelTheme.iconHover : PanelTheme.iconDefault))
+                            .frame(width: 28, height: 28)
+                            .background(revealHovered ? Color(PanelTheme.surfaceHover) : Color.clear)
+                            .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Reveal in Finder")
+                    .onHover { revealHovered = $0 }
+
+                    Button(action: copyPathToClipboard) {
+                        Image(systemName: showCopiedFeedback ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color(showCopiedFeedback ? PanelTheme.success : (copyPathHovered ? PanelTheme.iconHover : PanelTheme.iconDefault)))
+                            .frame(width: 28, height: 28)
+                            .background(copyPathHovered ? Color(PanelTheme.surfaceHover) : Color.clear)
+                            .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy path")
+                    .onHover { copyPathHovered = $0 }
+                }
+
                 Button(action: onRefresh) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 12, weight: .medium))
