@@ -4,7 +4,8 @@ import SwiftUI
 struct OutlineSidebar: View {
     let blocks: [MarkdownBlock]
     @Binding var scrollTarget: Int?
-    let theme: MarkdownTheme
+
+    @Environment(\.adaptiveTheme) private var theme
 
     /// Extract headings with their block indices for scroll targeting
     private var headings: [(index: Int, level: Int, text: String)] {
@@ -20,24 +21,17 @@ struct OutlineSidebar: View {
             HStack {
                 Text("OUTLINE")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundColor(theme.textMutedC)
+                    .tracking(0.5)
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, AdaptiveTheme.spacing12)
+            .padding(.vertical, AdaptiveTheme.spacing8)
 
-            Divider()
-                .background(theme.border)
+            SidebarDivider()
 
             if headings.isEmpty {
-                // Empty state
-                VStack {
-                    Spacer()
-                    Text("No headings")
-                        .font(.system(size: 12))
-                        .foregroundColor(theme.textMuted)
-                    Spacer()
-                }
+                SidebarEmptyState(icon: "list.bullet", message: "No headings")
             } else {
                 // Heading list
                 ScrollView {
@@ -45,19 +39,18 @@ struct OutlineSidebar: View {
                         ForEach(headings, id: \.index) { heading in
                             OutlineRow(
                                 heading: heading,
-                                theme: theme,
                                 onTap: {
                                     scrollTarget = heading.index
                                 }
                             )
                         }
                     }
-                    .padding(.vertical, 8)
+                    .padding(.vertical, AdaptiveTheme.spacing8)
                 }
             }
         }
         .frame(width: 200)
-        .background(theme.codeBackground)
+        .background(theme.backgroundC)
     }
 }
 
@@ -65,25 +58,26 @@ struct OutlineSidebar: View {
 
 struct OutlineRow: View {
     let heading: (index: Int, level: Int, text: String)
-    let theme: MarkdownTheme
     let onTap: () -> Void
 
+    @Environment(\.adaptiveTheme) private var theme
     @State private var isHovered = false
 
     var body: some View {
         Button(action: onTap) {
             Text(heading.text)
                 .font(.system(size: 12))
-                .foregroundColor(isHovered ? theme.accent : theme.textPrimary)
+                .foregroundColor(isHovered ? theme.accentC : theme.textPrimaryC)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 4)
+                .padding(.vertical, AdaptiveTheme.spacing4)
                 .padding(.leading, CGFloat(heading.level - 1) * 12 + 12)
-                .padding(.trailing, 12)
+                .padding(.trailing, AdaptiveTheme.spacing12)
         }
         .buttonStyle(.plain)
-        .background(isHovered ? theme.surfaceElevated : Color.clear)
+        .background(isHovered ? theme.surfaceHoverC : Color.clear)
         .onHover { isHovered = $0 }
+        .animation(.linear(duration: AdaptiveTheme.animationFast), value: isHovered)
     }
 }

@@ -185,7 +185,7 @@ struct TerminalWithPanelView<Content: View>: View {
     @State private var showDangerAlert = false
 
     /// Animation for panel transitions
-    private let panelTransition = Animation.easeInOut(duration: PanelTheme.animationNormal)
+    private let panelTransition = Animation.easeInOut(duration: AdaptiveTheme.animationNormal)
 
     init(panelState: MarkdownPanelState, config: Ghostty.Config? = nil, @ViewBuilder content: () -> Content) {
         self.panelState = panelState
@@ -251,6 +251,7 @@ struct TerminalWithPanelView<Content: View>: View {
         } message: {
             Text("This command may be destructive. Are you sure?")
         }
+        .adaptiveThemeFromSystem()
     }
 
     /// Handle code execution with safety check for dangerous commands
@@ -278,6 +279,8 @@ struct PanelContainer<Content: View>: View {
     let identifier: String?
     let content: Content
 
+    @Environment(\.adaptiveTheme) private var theme
+
     init(identifier: String? = nil, @ViewBuilder content: () -> Content) {
         self.identifier = identifier
         self.content = content()
@@ -285,16 +288,16 @@ struct PanelContainer<Content: View>: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: PanelTheme.radiusLarge, style: .continuous)
-                .fill(Color(PanelTheme.surfaceElevated))
+            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusLarge, style: .continuous)
+                .fill(theme.surfaceElevatedC)
             content
         }
-        .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusLarge, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusLarge, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: PanelTheme.radiusLarge, style: .continuous)
-                .stroke(Color(PanelTheme.borderSubtle), lineWidth: 1)
+            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusLarge, style: .continuous)
+                .stroke(theme.borderSubtleC, lineWidth: 1)
         )
-        .padding(PanelTheme.spacing8)
+        .padding(AdaptiveTheme.spacing8)
         .modifier(AccessibilityIdentifierModifier(identifier: identifier))
     }
 }
@@ -318,17 +321,18 @@ struct ModernDivider: View {
     let maxValue: CGFloat
     var inverted: Bool = false
 
+    @Environment(\.adaptiveTheme) private var theme
     @State private var isDragging = false
     @State private var isHovered = false
     @State private var dragStartPosition: CGFloat = 0
 
     private var dividerColor: Color {
         if isDragging {
-            return Color(PanelTheme.accent)
+            return theme.accentC
         } else if isHovered {
-            return Color(PanelTheme.textMuted)
+            return theme.textMutedC
         } else {
-            return Color(PanelTheme.border)
+            return theme.borderC
         }
     }
 
@@ -337,8 +341,8 @@ struct ModernDivider: View {
         Rectangle()
             .fill(dividerColor)
             .frame(width: isDragging || isHovered ? 3 : 1)
-            .animation(.easeOut(duration: PanelTheme.animationFast), value: isDragging)
-            .animation(.easeOut(duration: PanelTheme.animationFast), value: isHovered)
+            .animation(.easeOut(duration: AdaptiveTheme.animationFast), value: isDragging)
+            .animation(.easeOut(duration: AdaptiveTheme.animationFast), value: isHovered)
             .overlay(
                 // Invisible drag handle extends beyond visual divider
                 Color.clear

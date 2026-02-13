@@ -349,7 +349,7 @@ struct MermaidView: NSViewRepresentable {
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "heightHandler", let height = message.body as? CGFloat {
                 DispatchQueue.main.async {
-                    withAnimation(.easeOut(duration: PanelTheme.animationNormal)) {
+                    withAnimation(.easeOut(duration: AdaptiveTheme.animationNormal)) {
                         self.parent.height = max(height + 20, 100) // Add padding
                     }
                 }

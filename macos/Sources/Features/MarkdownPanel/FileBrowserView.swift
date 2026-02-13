@@ -14,6 +14,7 @@ struct FileBrowserView: View {
     @Binding var rootPath: String
     let onFileSelected: (String) -> Void
 
+    @Environment(\.adaptiveTheme) private var theme
     @State private var items: [FileItem] = []
     @State private var expandedDirs: Set<String> = []
     @State private var selectedPath: String?
@@ -34,25 +35,25 @@ struct FileBrowserView: View {
     private var projectName: String {
         return URL(fileURLWithPath: effectivePath).lastPathComponent
     }
-    
+
     /// Breadcrumb components from current path
     private var breadcrumbComponents: [(name: String, path: String)] {
         let url = URL(fileURLWithPath: effectivePath)
         var components: [(String, String)] = [("Home", NSHomeDirectory())]
-        
+
         guard effectivePath != NSHomeDirectory() else { return components }
-        
+
         let pathComponents = url.pathComponents
         var currentPath = ""
-        
+
         for component in pathComponents where component != "/" {
             currentPath = (currentPath as NSString).appendingPathComponent(component)
             components.append((component, currentPath))
         }
-        
+
         return components
     }
-    
+
     /// Filtered items based on search text
     private var filteredItems: [FileItem] {
         if searchText.isEmpty {
@@ -64,7 +65,7 @@ struct FileBrowserView: View {
     var body: some View {
         VStack(spacing: 0) {
             // MARK: - Navigation Section
-            
+
             // Compact toolbar
             FileBrowserToolbar(
                 showHiddenFiles: $showHiddenFiles,
@@ -73,66 +74,33 @@ struct FileBrowserView: View {
                 canGoUp: canGoUp
             )
             .onChange(of: showHiddenFiles) { _ in loadDirectory() }
-            
-            SectionDivider()
-            
+
+            SidebarDivider()
+
             // Breadcrumb navigation
             BreadcrumbBar(components: breadcrumbComponents, onNavigate: { path in
                 rootPath = path
             })
-            
-            SectionDivider()
-            
+
+            SidebarDivider()
+
             // MARK: - Quick Access Section (Unified Accordion)
-            
+
             DisclosureGroup(isExpanded: $showQuickAccess) {
-                VStack(alignment: .leading, spacing: PanelTheme.spacing8) {
+                VStack(alignment: .leading, spacing: AdaptiveTheme.spacing8) {
                     // Search field
-                    VStack(alignment: .leading, spacing: PanelTheme.spacing4) {
-                        Text("Filter")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(Color(PanelTheme.textMuted))
-                            .tracking(0.5)
-                            .padding(.horizontal, PanelTheme.spacing10)
-                        
-                        HStack(spacing: PanelTheme.spacing8) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 12))
-                                .foregroundColor(Color(PanelTheme.textMuted))
-                            
-                            TextField("Filter files...", text: $searchText)
-                                .font(.system(size: 12))
-                                .textFieldStyle(.plain)
-                            
-                            if !searchText.isEmpty {
-                                Button(action: { searchText = "" }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(Color(PanelTheme.textMuted))
-                                }
-                                .buttonStyle(.plain)
-                                .help("Clear search")
-                            }
-                        }
-                        .padding(.horizontal, PanelTheme.spacing10)
-                        .padding(.vertical, PanelTheme.spacing8)
-                        .background(Color(PanelTheme.surfaceElevated))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: PanelTheme.radiusSmall, style: .continuous)
-                                .stroke(Color(PanelTheme.borderSubtle), lineWidth: 1)
-                        )
-                    }
-                    
+                    SidebarSearchField(text: $searchText, placeholder: "Filter files...", label: "Filter")
+
                     // Recent files (shown only if available)
                     if !recentFiles.isEmpty {
-                        VStack(alignment: .leading, spacing: PanelTheme.spacing4) {
+                        VStack(alignment: .leading, spacing: AdaptiveTheme.spacing4) {
                             Text("Recent")
                                 .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(Color(PanelTheme.textMuted))
+                                .foregroundColor(theme.textMutedC)
                                 .tracking(0.5)
-                                .padding(.horizontal, PanelTheme.spacing10)
-                            
-                            VStack(alignment: .leading, spacing: PanelTheme.spacing4) {
+                                .padding(.horizontal, AdaptiveTheme.spacing10)
+
+                            VStack(alignment: .leading, spacing: AdaptiveTheme.spacing4) {
                                 ForEach(Array(recentFiles.prefix(5).enumerated()), id: \.element) { _, filePath in
                                     RecentFileButton(
                                         filePath: filePath,
@@ -144,43 +112,43 @@ struct FileBrowserView: View {
                                     )
                                 }
                             }
-                            .padding(.horizontal, PanelTheme.spacing10)
+                            .padding(.horizontal, AdaptiveTheme.spacing10)
                         }
                     }
                 }
-                .padding(.vertical, PanelTheme.spacing8)
+                .padding(.vertical, AdaptiveTheme.spacing8)
             } label: {
-                HStack(spacing: PanelTheme.spacing6) {
+                HStack(spacing: AdaptiveTheme.spacing6) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color(PanelTheme.textMuted))
-                    
+                        .foregroundColor(theme.textMutedC)
+
                     Text("Quick Access")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color(PanelTheme.textMuted))
-                    
+                        .foregroundColor(theme.textMutedC)
+
                     Spacer()
                 }
             }
-            .padding(.horizontal, PanelTheme.spacing8)
-            .padding(.vertical, PanelTheme.spacing6)
-            .animation(.easeInOut(duration: PanelTheme.animationNormal), value: showQuickAccess)
+            .padding(.horizontal, AdaptiveTheme.spacing8)
+            .padding(.vertical, AdaptiveTheme.spacing6)
+            .animation(.easeInOut(duration: AdaptiveTheme.animationNormal), value: showQuickAccess)
 
-            SectionDivider()
+            SidebarDivider()
 
             // MARK: - Contents Section
 
             // Project header
-            ProjectHeader(name: projectName)
+            SidebarProjectHeader(name: projectName)
 
             Capsule()
-                .fill(Color(PanelTheme.border))
+                .fill(theme.borderC)
                 .frame(height: 1)
-                .padding(.horizontal, PanelTheme.spacing8)
+                .padding(.horizontal, AdaptiveTheme.spacing8)
 
             // File tree
             if let error = errorMessage {
-                EmptyStateView(message: error)
+                SidebarEmptyState(icon: "folder.badge.questionmark", message: error)
             } else {
                 VStack(spacing: 0) {
                     ScrollViewReader { proxy in
@@ -204,59 +172,59 @@ struct FileBrowserView: View {
                                     .id(index)
                                     .onReceive(Just(selectedItemIndex)) { newIndex in
                                         if newIndex >= 0 && newIndex < filteredItems.count {
-                                            withAnimation(.spring(response: PanelTheme.springResponse, dampingFraction: PanelTheme.springDamping)) {
+                                            withAnimation(.spring(response: AdaptiveTheme.springResponse, dampingFraction: AdaptiveTheme.springDamping)) {
                                                 proxy.scrollTo(newIndex, anchor: .center)
                                             }
                                         }
                                     }
                                 }
                             }
-                            .padding(.vertical, PanelTheme.spacing6)
+                            .padding(.vertical, AdaptiveTheme.spacing6)
                         }
                         .scrollContentBackground(.hidden)
                     }
                 }
                 .background(
-                    RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
-                        .fill(Color(PanelTheme.background))
+                    RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
+                        .fill(theme.backgroundC)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
+                    RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
                         .stroke(
                             isDropTargetHighlighted
-                                ? Color(PanelTheme.selectionActive)
-                                : Color(PanelTheme.borderSubtle),
+                                ? theme.selectionActiveC
+                                : theme.borderSubtleC,
                             lineWidth: isDropTargetHighlighted ? 2 : 1
                         )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous))
-                .padding(.horizontal, PanelTheme.spacing8)
-                .padding(.vertical, PanelTheme.spacing8)
+                .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous))
+                .padding(.horizontal, AdaptiveTheme.spacing8)
+                .padding(.vertical, AdaptiveTheme.spacing8)
                 .onDrop(of: [.fileURL], isTargeted: $isDropTargetHighlighted) { providers in
                     handleFileDrop(providers: providers)
                 }
             }
-            
+
             // Keyboard navigation hint
             if !filteredItems.isEmpty {
                 Text("↑↓ to navigate • ⏎/Space to select • ⎋ to clear")
                     .font(.caption2)
-                    .foregroundColor(Color(PanelTheme.textMuted))
-                    .padding(.horizontal, PanelTheme.spacing12)
-                    .padding(.vertical, PanelTheme.spacing4)
+                    .foregroundColor(theme.textMutedC)
+                    .padding(.horizontal, AdaptiveTheme.spacing12)
+                    .padding(.vertical, AdaptiveTheme.spacing4)
             }
         }
         .frame(minWidth: 200)
         .background(
-            RoundedRectangle(cornerRadius: PanelTheme.radiusLarge, style: .continuous)
-                .fill(Color(PanelTheme.background))
+            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusLarge, style: .continuous)
+                .fill(theme.backgroundC)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: PanelTheme.radiusLarge, style: .continuous)
-                .stroke(Color(PanelTheme.borderSubtle), lineWidth: 1)
+            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusLarge, style: .continuous)
+                .stroke(theme.borderSubtleC, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusLarge, style: .continuous))
-        .onAppear { 
+        .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusLarge, style: .continuous))
+        .onAppear {
             loadDirectory()
             loadRecentFilesFromStorage()
         }
@@ -337,13 +305,13 @@ struct FileBrowserView: View {
 
         return .handled
     }
-    
+
     /// Add file to recent files (persisted, max 10 entries)
     private func addToRecentFiles(_ filePath: String) {
         // Remove if already exists, then insert at beginning
         recentFiles.removeAll { $0 == filePath }
         recentFiles.insert(filePath, at: 0)
-        
+
         // Keep max 10 recent files
         if recentFiles.count > 10 {
             recentFiles = Array(recentFiles.prefix(10))
@@ -432,18 +400,6 @@ struct FileBrowserView: View {
     }
 }
 
-// MARK: - Section Divider
-
-struct SectionDivider: View {
-    var body: some View {
-        Capsule()
-            .fill(Color(PanelTheme.borderSubtle))
-            .frame(height: 1)
-            .padding(.vertical, PanelTheme.spacing6)
-            .padding(.horizontal, PanelTheme.spacing8)
-    }
-}
-
 // MARK: - Toolbar
 
 struct FileBrowserToolbar: View {
@@ -452,8 +408,10 @@ struct FileBrowserToolbar: View {
     let onOpenFinder: () -> Void
     let canGoUp: Bool
 
+    @Environment(\.adaptiveTheme) private var theme
+
     var body: some View {
-        HStack(spacing: PanelTheme.spacing8) {
+        HStack(spacing: AdaptiveTheme.spacing8) {
             ToolbarIconButton(
                 icon: "arrow.up",
                 tooltip: "Parent directory",
@@ -476,17 +434,17 @@ struct FileBrowserToolbar: View {
                 action: onOpenFinder
             )
         }
-        .padding(.horizontal, PanelTheme.spacing12)
-        .padding(.vertical, PanelTheme.spacing8)
+        .padding(.horizontal, AdaptiveTheme.spacing12)
+        .padding(.vertical, AdaptiveTheme.spacing8)
         .background(
-            RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
-                .fill(Color(PanelTheme.surfaceElevated))
+            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
+                .fill(theme.surfaceElevatedC)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
-                .stroke(Color(PanelTheme.borderSubtle), lineWidth: 1)
+            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
+                .stroke(theme.borderSubtleC, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous))
     }
 }
 
@@ -495,21 +453,23 @@ struct ToolbarIconButton: View {
     let tooltip: String
     let action: () -> Void
 
+    @Environment(\.adaptiveTheme) private var theme
     @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Color(isHovered ? PanelTheme.iconHover : PanelTheme.iconDefault))
+                .foregroundColor(Color(isHovered ? theme.iconHover : theme.iconDefault))
                 .frame(width: 24, height: 24)
-                .background(isHovered ? Color(PanelTheme.surfaceHover) : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall, style: .continuous))
-                .contentShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall, style: .continuous))
+                .background(isHovered ? theme.surfaceHoverC : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(tooltip)
         .onHover { isHovered = $0 }
+        .animation(.linear(duration: AdaptiveTheme.animationFast), value: isHovered)
     }
 }
 
@@ -518,32 +478,34 @@ struct ToolbarIconButton: View {
 struct BreadcrumbBar: View {
     let components: [(name: String, path: String)]
     let onNavigate: (String) -> Void
-    
+
+    @Environment(\.adaptiveTheme) private var theme
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: PanelTheme.spacing4) {
+            HStack(spacing: AdaptiveTheme.spacing4) {
                 ForEach(Array(components.enumerated()), id: \.offset) { index, component in
-                    HStack(spacing: PanelTheme.spacing4) {
+                    HStack(spacing: AdaptiveTheme.spacing4) {
                         Button(action: { onNavigate(component.path) }) {
                             Text(component.name)
                                 .font(.system(size: 11))
-                                .foregroundColor(Color(PanelTheme.textMuted))
+                                .foregroundColor(theme.textMutedC)
                                 .lineLimit(1)
                         }
                         .buttonStyle(.plain)
-                        
+
                         if index < components.count - 1 {
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(Color(PanelTheme.textMuted))
+                                .foregroundColor(theme.textMutedC)
                         }
                     }
                 }
             }
-            .padding(.horizontal, PanelTheme.spacing10)
-            .padding(.vertical, PanelTheme.spacing6)
+            .padding(.horizontal, AdaptiveTheme.spacing10)
+            .padding(.vertical, AdaptiveTheme.spacing6)
         }
-        .background(Color(PanelTheme.surfaceElevated).opacity(0.5))
+        .background(theme.surfaceElevatedC.opacity(0.5))
     }
 }
 
@@ -552,110 +514,48 @@ struct BreadcrumbBar: View {
 struct RecentFileButton: View {
     let filePath: String
     let onSelect: () -> Void
-    
+
+    @Environment(\.adaptiveTheme) private var theme
     @State private var isHovered = false
-    
+
     private var fileName: String {
         URL(fileURLWithPath: filePath).lastPathComponent
     }
-    
+
     private var parentPath: String {
         URL(fileURLWithPath: filePath).deletingLastPathComponent().path
     }
-    
+
     var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: PanelTheme.spacing6) {
+            HStack(spacing: AdaptiveTheme.spacing6) {
                 Image(systemName: "doc.text.fill")
                     .font(.system(size: 11))
-                    .foregroundColor(Color(PanelTheme.markdownIcon))
-                
+                    .foregroundColor(theme.markdownIconC)
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(fileName)
                         .font(.system(size: 11))
-                        .foregroundColor(Color(PanelTheme.textPrimary))
+                        .foregroundColor(theme.textPrimaryC)
                         .lineLimit(1)
-                    
+
                     Text(parentPath)
                         .font(.system(size: 9))
-                        .foregroundColor(Color(PanelTheme.textMuted))
+                        .foregroundColor(theme.textMutedC)
                         .lineLimit(1)
                 }
-                
+
                 Spacer()
             }
-            .padding(.horizontal, PanelTheme.spacing8)
-            .padding(.vertical, PanelTheme.spacing6)
-            .background(isHovered ? Color(PanelTheme.surfaceHover) : Color.clear)
-            .cornerRadius(PanelTheme.radiusSmall)
+            .padding(.horizontal, AdaptiveTheme.spacing8)
+            .padding(.vertical, AdaptiveTheme.spacing6)
+            .background(isHovered ? theme.surfaceHoverC : Color.clear)
+            .cornerRadius(AdaptiveTheme.radiusSmall)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-    }
-}
-
-// MARK: - Project Header
-
-struct ProjectHeader: View {
-    let name: String
-
-    var body: some View {
-        HStack(spacing: PanelTheme.spacing8) {
-            Image(systemName: "folder.fill")
-                .font(.system(size: 14))
-                .foregroundColor(Color(PanelTheme.folderIcon))
-
-            Text(name)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Color(PanelTheme.textPrimary))
-                .lineLimit(1)
-
-            Spacer()
-        }
-        .padding(.horizontal, PanelTheme.spacing12)
-        .padding(.vertical, PanelTheme.spacing10)
-        .background(
-            RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
-                .fill(Color(PanelTheme.surfaceElevated))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
-                .stroke(Color(PanelTheme.borderSubtle), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous))
-    }
-}
-
-// MARK: - Empty State
-
-struct EmptyStateView: View {
-    let message: String
-
-    var body: some View {
-        VStack(spacing: PanelTheme.spacing12) {
-            Spacer()
-            Image(systemName: "folder.badge.questionmark")
-                .font(.system(size: 32))
-                .foregroundColor(Color(PanelTheme.textMuted))
-            Text(message)
-                .font(.system(size: 13))
-                .foregroundColor(Color(PanelTheme.textSecondary))
-                .multilineTextAlignment(.center)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(PanelTheme.spacing12)
-        .background(
-            RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
-                .fill(Color(PanelTheme.surfaceElevated))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous)
-                .stroke(Color(PanelTheme.borderSubtle), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusMedium, style: .continuous))
-        .padding(PanelTheme.spacing8)
+        .animation(.linear(duration: AdaptiveTheme.animationFast), value: isHovered)
     }
 }
 
@@ -671,6 +571,7 @@ struct FileTreeRow: View {
     let onFileSelected: (String) -> Void
     let showHiddenFiles: Bool
 
+    @Environment(\.adaptiveTheme) private var theme
     @State private var isHovered = false
     @State private var children: [FileItem]?
 
@@ -678,7 +579,7 @@ struct FileTreeRow: View {
     private let maxIndentLevels: CGFloat = 6
 
     private var indentOffset: CGFloat {
-        min(CGFloat(depth), maxIndentLevels) * indentWidth + PanelTheme.spacing8
+        min(CGFloat(depth), maxIndentLevels) * indentWidth + AdaptiveTheme.spacing8
     }
 
     var body: some View {
@@ -693,7 +594,7 @@ struct FileTreeRow: View {
                 if item.isDirectory {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(Color(PanelTheme.textMuted))
+                        .foregroundColor(theme.textMutedC)
                         .frame(width: 16, height: 16)
                         .contentShape(Rectangle())
                         .onTapGesture { toggleExpand() }
@@ -704,25 +605,25 @@ struct FileTreeRow: View {
                 // Icon
                 Image(systemName: item.isDirectory ? "folder.fill" : "doc.text.fill")
                     .font(.system(size: 14))
-                    .foregroundColor(Color(item.isDirectory ? PanelTheme.folderIcon : PanelTheme.markdownIcon))
+                    .foregroundColor(item.isDirectory ? theme.folderIconC : theme.markdownIconC)
                     .frame(width: 20)
 
                 // File name
                 Text(item.name)
                     .font(.system(size: 13, design: .monospaced))
-                    .foregroundColor(Color(item.name.hasPrefix(".") ? PanelTheme.textMuted : PanelTheme.textPrimary))
+                    .foregroundColor(item.name.hasPrefix(".") ? theme.textMutedC : theme.textPrimaryC)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .padding(.leading, PanelTheme.spacing6)
+                    .padding(.leading, AdaptiveTheme.spacing6)
 
                 Spacer()
             }
-            .padding(.vertical, PanelTheme.spacing4)
-            .padding(.trailing, PanelTheme.spacing8)
+            .padding(.vertical, AdaptiveTheme.spacing4)
+            .padding(.trailing, AdaptiveTheme.spacing8)
             .background(rowBackground)
-            .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall, style: .continuous))
-            .padding(.horizontal, PanelTheme.spacing4)
-            .contentShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall, style: .continuous))
+            .padding(.horizontal, AdaptiveTheme.spacing4)
+            .contentShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall, style: .continuous))
             .onTapGesture {
                 if item.isDirectory {
                     toggleExpand()
@@ -749,15 +650,15 @@ struct FileTreeRow: View {
                 }
             }
         }
-        .animation(.easeOut(duration: PanelTheme.animationFast), value: isExpanded)
+        .animation(.easeOut(duration: AdaptiveTheme.animationFast), value: isExpanded)
     }
 
     @ViewBuilder
     private var rowBackground: some View {
         if isSelected {
-            Color(PanelTheme.selectionActive)
+            theme.selectionActiveC
         } else if isHovered {
-            Color(PanelTheme.surfaceHover)
+            theme.surfaceHoverC
         } else {
             Color.clear
         }
@@ -854,4 +755,5 @@ enum FileItemProcessor {
         onFileSelected: { _ in }
     )
     .frame(width: 260, height: 500)
+    .adaptiveThemeFromSystem()
 }

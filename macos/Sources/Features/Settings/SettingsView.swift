@@ -106,50 +106,34 @@ struct SettingsView: View {
     @State private var searchCategory: String = "all"
     @State private var selectedTab: SettingsTab? = .general
     @ObservedObject private var settingsSync = SettingsSync.shared
+    @Environment(\.adaptiveTheme) private var theme
 
     private var quickAccessItems: [SettingItem] {
         let ids = ["font-settings", "appearance-settings", "markdown-settings"]
         return settingsData.filter { ids.contains($0.id) }
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Sync status and conflict notice
-            VStack(spacing: 8) {
+            VStack(spacing: AdaptiveTheme.spacing8) {
                 SyncStatusIndicator(settingsSync: settingsSync)
-                
+
                 ExternalConflictNotice(settingsSync: settingsSync) {
                     settingsSync.loadFromConfigFile()
                 }
             }
-            .padding(10)
-            .background(Color(.controlBackgroundColor).opacity(0.5))
-            
+            .padding(AdaptiveTheme.spacing10)
+            .background(theme.surfaceElevatedC.opacity(0.5))
+
             // Search bar with category filter
-            VStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                    
-                    TextField("Search settings...", text: $searchText)
-                        .font(.system(size: 12))
-                        .textFieldStyle(.plain)
-                        .padding(6)
-                        .background(Color(.controlBackgroundColor))
-                        .cornerRadius(4)
-                        .help("Press Cmd+F to focus search")
-                    
-                    if !searchText.isEmpty {
-                        Button(action: { searchText = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                
+            VStack(spacing: AdaptiveTheme.spacing8) {
+                SidebarSearchField(
+                    text: $searchText,
+                    placeholder: "Search settings..."
+                )
+                .help("Press Cmd+F to focus search")
+
                 // Category filter (shown when searching)
                 if !searchText.isEmpty {
                     Picker("Category", selection: $searchCategory) {
@@ -163,17 +147,24 @@ struct SettingsView: View {
                     .font(.system(size: 11))
                 }
             }
-            .padding(10)
-            .background(Color(.controlBackgroundColor))
-            .border(Color(.separatorColor), width: 1)
-            
+            .padding(AdaptiveTheme.spacing10)
+            .background(theme.surfaceElevatedC)
+            .overlay(
+                Rectangle()
+                    .fill(theme.borderSubtleC)
+                    .frame(height: 1),
+                alignment: .bottom
+            )
+
             // Conditional content based on search
             if searchText.isEmpty {
                 HStack(spacing: 0) {
                     SettingsSidebar(selection: $selectedTab)
                         .frame(width: 160)
 
-                    Divider()
+                    Rectangle()
+                        .fill(theme.borderSubtleC)
+                        .frame(width: 1)
 
                     VStack(spacing: 0) {
                         QuickAccessPanel(items: quickAccessItems) { item in
@@ -189,6 +180,7 @@ struct SettingsView: View {
             }
         }
         .frame(width: 560, height: 560)
+        .adaptiveThemeFromSystem()
         .onAppear {
             _ = SettingsSync.shared
         }
@@ -217,29 +209,29 @@ struct SettingsView: View {
 struct SearchableSettingsView: View {
     let searchText: String
     let category: String
-    
+
+    @Environment(\.adaptiveTheme) private var theme
+
     private var filteredSettings: [SettingItem] {
         settingsData.filter { setting in
-            // Filter by category
             if category != "all" && setting.category != category {
                 return false
             }
-            
-            // Filter by search text (search in title, description, and keywords)
+
             let titleMatch = setting.title.localizedCaseInsensitiveContains(searchText)
             let descriptionMatch = setting.description.localizedCaseInsensitiveContains(searchText)
             let keywordMatch = setting.keywords.contains { keyword in
                 keyword.localizedCaseInsensitiveContains(searchText)
             }
-            
+
             return titleMatch || descriptionMatch || keywordMatch
         }
     }
-    
+
     private func categoryColor(for settingCategory: String) -> Color {
         switch settingCategory {
         case "general":
-            return Color.blue.opacity(0.2)
+            return theme.accentC.opacity(0.2)
         case "appearance":
             return Color.purple.opacity(0.2)
         case "behavior":
@@ -247,50 +239,52 @@ struct SearchableSettingsView: View {
         case "markdown":
             return Color.green.opacity(0.2)
         default:
-            return Color.gray.opacity(0.1)
+            return theme.surfaceHoverC
         }
     }
-    
+
     var body: some View {
         ScrollView {
             if filteredSettings.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 32))
-                        .foregroundColor(.secondary)
-                    Text("No settings found")
-                        .font(.headline)
-                    Text("Try adjusting your search")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                SidebarEmptyState(
+                    icon: "magnifyingglass",
+                    message: "No settings found",
+                    detail: "Try adjusting your search"
+                )
                 .padding(40)
             } else {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: AdaptiveTheme.spacing12) {
                     ForEach(filteredSettings) { setting in
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: AdaptiveTheme.spacing8) {
                             HStack {
                                 Text(setting.title)
-                                    .font(.headline)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(theme.textPrimaryC)
                                 Spacer()
                                 Text(setting.category.uppercased())
-                                    .font(.caption)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .tracking(0.5)
+                                    .padding(.horizontal, AdaptiveTheme.spacing8)
+                                    .padding(.vertical, AdaptiveTheme.spacing4)
                                     .background(categoryColor(for: setting.category))
-                                    .cornerRadius(4)
+                                    .clipShape(Capsule())
                             }
                             Text(setting.description)
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(theme.textSecondaryC)
                         }
-                        .padding(10)
-                        .background(Color(.controlBackgroundColor))
-                        .cornerRadius(6)
+                        .padding(AdaptiveTheme.spacing10)
+                        .background(
+                            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
+                                .fill(theme.surfaceElevatedC)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
+                                .stroke(theme.borderSubtleC, lineWidth: 1)
+                        )
                     }
                 }
-                .padding(16)
+                .padding(AdaptiveTheme.spacing16)
             }
         }
     }
@@ -300,15 +294,25 @@ struct SearchableSettingsView: View {
 
 struct SettingsSidebar: View {
     @Binding var selection: SettingsTab?
+    @Environment(\.adaptiveTheme) private var theme
 
     var body: some View {
-        List(selection: $selection) {
-            ForEach(SettingsTab.allCases) { tab in
-                Label(tab.title, systemImage: tab.systemImage)
-                    .tag(Optional(tab))
+        ScrollView {
+            VStack(spacing: AdaptiveTheme.spacing4) {
+                ForEach(SettingsTab.allCases) { tab in
+                    SidebarIconRow(
+                        icon: tab.systemImage,
+                        title: tab.title,
+                        isSelected: selection == tab,
+                        iconColor: selection == tab ? theme.accentC : nil,
+                        onTap: { selection = tab }
+                    )
+                }
             }
+            .padding(.vertical, AdaptiveTheme.spacing8)
+            .padding(.horizontal, AdaptiveTheme.spacing6)
         }
-        .listStyle(.sidebar)
+        .background(theme.backgroundC)
     }
 }
 
@@ -318,32 +322,39 @@ struct QuickAccessPanel: View {
     let items: [SettingItem]
     let onSelect: (SettingItem) -> Void
 
+    @Environment(\.adaptiveTheme) private var theme
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: AdaptiveTheme.spacing8) {
             HStack {
                 Text("Quick Access")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(theme.textMutedC)
                     .textCase(.uppercase)
+                    .tracking(0.5)
                 Spacer()
                 Image(systemName: "bolt.fill")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(theme.accentC)
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, AdaptiveTheme.spacing10)
 
-            HStack(spacing: 10) {
+            HStack(spacing: AdaptiveTheme.spacing10) {
                 ForEach(items.prefix(3)) { item in
                     QuickAccessCard(item: item, onSelect: onSelect)
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, AdaptiveTheme.spacing10)
         }
-        .padding(.vertical, 8)
-        .background(Color(.controlBackgroundColor).opacity(0.6))
-        .border(Color(.separatorColor), width: 1)
+        .padding(.vertical, AdaptiveTheme.spacing8)
+        .background(theme.surfaceElevatedC.opacity(0.6))
+        .overlay(
+            Rectangle()
+                .fill(theme.borderSubtleC)
+                .frame(height: 1),
+            alignment: .bottom
+        )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Quick Access to Common Settings")
     }
@@ -353,41 +364,45 @@ struct QuickAccessCard: View {
     let item: SettingItem
     let onSelect: (SettingItem) -> Void
 
+    @Environment(\.adaptiveTheme) private var theme
     @State private var isHovered = false
     @FocusState private var isFocused: Bool
 
+    private var isActive: Bool { isHovered || isFocused }
+
     var body: some View {
         Button(action: { onSelect(item) }) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: AdaptiveTheme.spacing4) {
                 HStack {
                     Text(item.title)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+                        .font(.system(size: 12, weight: .semibold))
                     Spacer()
-                    if isHovered || isFocused {
+                    if isActive {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(.accentColor)
-                            .transition(.opacity)
+                            .foregroundColor(theme.accentC)
+                            .transition(.opacity.combined(with: .scale(scale: 0.8)))
                     }
                 }
                 Text(item.description)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(theme.textSecondaryC)
                     .lineLimit(2)
             }
-            .padding(8)
+            .padding(AdaptiveTheme.spacing8)
             .frame(maxWidth: 180, alignment: .leading)
-            .foregroundColor(.primary)
+            .foregroundColor(theme.textPrimaryC)
         }
         .buttonStyle(.plain)
-        .background(Color(.controlBackgroundColor))
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isHovered || isFocused ? Color.accentColor.opacity(0.1) : Color.clear)
-                .animation(.easeInOut(duration: 0.15), value: isHovered || isFocused)
+            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
+                .fill(isActive ? theme.surfaceHoverC : theme.surfaceElevatedC)
         )
-        .cornerRadius(6)
+        .overlay(
+            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
+                .stroke(isActive ? theme.accentC.opacity(0.3) : theme.borderSubtleC, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous))
         .onHover { hovering in
             isHovered = hovering
             if hovering {
@@ -397,6 +412,7 @@ struct QuickAccessCard: View {
             }
         }
         .focused($isFocused)
+        .animation(.linear(duration: AdaptiveTheme.animationFast), value: isActive)
         .help("Scroll to \(item.category) settings")
         .accessibilityLabel(item.title)
         .accessibilityHint(item.description)

@@ -8,6 +8,8 @@ struct MarkdownPanelView: View {
     let onClose: () -> Void
     let onRefresh: () -> Void
 
+    @Environment(\.adaptiveTheme) private var theme
+
     var body: some View {
         VStack(spacing: 0) {
             MarkdownPanelHeader(
@@ -17,13 +19,13 @@ struct MarkdownPanelView: View {
             )
 
             Rectangle()
-                .fill(Color(PanelTheme.border))
+                .fill(theme.borderC)
                 .frame(height: 1)
 
             MarkdownWebView(content: content)
         }
         .frame(minWidth: 300)
-        .background(Color(PanelTheme.background))
+        .background(theme.backgroundC)
     }
 }
 
@@ -34,6 +36,7 @@ struct MarkdownPanelHeader: View {
     let onClose: () -> Void
     let onRefresh: () -> Void
 
+    @Environment(\.adaptiveTheme) private var theme
     @State private var refreshHovered = false
     @State private var closeHovered = false
     @State private var revealHovered = false
@@ -64,19 +67,19 @@ struct MarkdownPanelHeader: View {
     }
 
     var body: some View {
-        HStack(spacing: PanelTheme.spacing8) {
+        HStack(spacing: AdaptiveTheme.spacing8) {
             // Breadcrumb path
-            HStack(spacing: PanelTheme.spacing4) {
+            HStack(spacing: AdaptiveTheme.spacing4) {
                 ForEach(Array(breadcrumbs.enumerated()), id: \.offset) { index, component in
                     if index > 0 {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(Color(PanelTheme.textMuted))
+                            .foregroundColor(theme.textMutedC)
                     }
 
                     Text(component)
                         .font(.system(size: 12, weight: index == breadcrumbs.count - 1 ? .medium : .regular))
-                        .foregroundColor(Color(index == breadcrumbs.count - 1 ? PanelTheme.textPrimary : PanelTheme.textSecondary))
+                        .foregroundColor(index == breadcrumbs.count - 1 ? theme.textPrimaryC : theme.textSecondaryC)
                         .lineLimit(1)
                 }
             }
@@ -84,16 +87,16 @@ struct MarkdownPanelHeader: View {
             Spacer()
 
             // Actions
-            HStack(spacing: PanelTheme.spacing4) {
+            HStack(spacing: AdaptiveTheme.spacing4) {
                 // Contextual actions (only show when filePath is available)
                 if filePath != nil {
                     Button(action: revealInFinder) {
                         Image(systemName: "folder")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(Color(revealHovered ? PanelTheme.iconHover : PanelTheme.iconDefault))
+                            .foregroundColor(Color(revealHovered ? theme.iconHover : theme.iconDefault))
                             .frame(width: 28, height: 28)
-                            .background(revealHovered ? Color(PanelTheme.surfaceHover) : Color.clear)
-                            .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall))
+                            .background(revealHovered ? theme.surfaceHoverC : Color.clear)
+                            .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall))
                     }
                     .buttonStyle(.plain)
                     .help("Reveal in Finder")
@@ -102,10 +105,10 @@ struct MarkdownPanelHeader: View {
                     Button(action: copyPathToClipboard) {
                         Image(systemName: showCopiedFeedback ? "checkmark" : "doc.on.doc")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(Color(showCopiedFeedback ? PanelTheme.success : (copyPathHovered ? PanelTheme.iconHover : PanelTheme.iconDefault)))
+                            .foregroundColor(Color(showCopiedFeedback ? theme.success : (copyPathHovered ? theme.iconHover : theme.iconDefault)))
                             .frame(width: 28, height: 28)
-                            .background(copyPathHovered ? Color(PanelTheme.surfaceHover) : Color.clear)
-                            .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall))
+                            .background(copyPathHovered ? theme.surfaceHoverC : Color.clear)
+                            .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall))
                     }
                     .buttonStyle(.plain)
                     .help("Copy path")
@@ -115,10 +118,10 @@ struct MarkdownPanelHeader: View {
                 Button(action: onRefresh) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(refreshHovered ? PanelTheme.iconHover : PanelTheme.iconDefault))
+                        .foregroundColor(Color(refreshHovered ? theme.iconHover : theme.iconDefault))
                         .frame(width: 28, height: 28)
-                        .background(refreshHovered ? Color(PanelTheme.surfaceHover) : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall))
+                        .background(refreshHovered ? theme.surfaceHoverC : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall))
                 }
                 .buttonStyle(.plain)
                 .help("Refresh")
@@ -127,19 +130,19 @@ struct MarkdownPanelHeader: View {
                 Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color(closeHovered ? PanelTheme.iconHover : PanelTheme.iconDefault))
+                        .foregroundColor(Color(closeHovered ? theme.iconHover : theme.iconDefault))
                         .frame(width: 28, height: 28)
-                        .background(closeHovered ? Color(PanelTheme.surfaceHover) : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: PanelTheme.radiusSmall))
+                        .background(closeHovered ? theme.surfaceHoverC : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall))
                 }
                 .buttonStyle(.plain)
                 .help("Close")
                 .onHover { closeHovered = $0 }
             }
         }
-        .padding(.horizontal, PanelTheme.spacing12)
-        .padding(.vertical, PanelTheme.spacing8)
-        .background(Color(PanelTheme.surfaceElevated))
+        .padding(.horizontal, AdaptiveTheme.spacing12)
+        .padding(.vertical, AdaptiveTheme.spacing8)
+        .background(theme.surfaceElevatedC)
     }
 }
 

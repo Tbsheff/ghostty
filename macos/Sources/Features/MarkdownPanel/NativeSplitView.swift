@@ -448,7 +448,7 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
 
         if animated {
             NSAnimationContext.runAnimationGroup({ context in
-                context.duration = PanelTheme.animationNormal
+                context.duration = AdaptiveTheme.animationNormal
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 context.allowsImplicitAnimation = true
 
