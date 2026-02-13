@@ -45,7 +45,7 @@
             parallelizable = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A5F1C1A12F00000100000003"
+               BlueprintIdentifier = "810ACC9E2E9D3301004F8F92"
                BuildableName = "GhosttyUITests.xctest"
                BlueprintName = "GhosttyUITests"
                ReferencedContainer = "container:Ghostty.xcodeproj">

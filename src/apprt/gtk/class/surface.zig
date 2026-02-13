@@ -19,6 +19,7 @@ const terminal = @import("../../../terminal/main.zig");
 const CoreSurface = @import("../../../Surface.zig");
 const gresource = @import("../build/gresource.zig");
 const ext = @import("../ext.zig");
+const gsettings = @import("../gsettings.zig");
 const gtk_key = @import("../key.zig");
 const ApprtSurface = @import("../Surface.zig");
 const Common = @import("../class.zig").Common;
@@ -399,6 +400,25 @@ pub const Surface = extern struct {
                 },
             );
         };
+
+        pub const readonly = struct {
+            pub const name = "readonly";
+            const impl = gobject.ext.defineProperty(
+                name,
+                Self,
+                bool,
+                .{
+                    .default = false,
+                    .accessor = gobject.ext.typedAccessor(
+                        Self,
+                        bool,
+                        .{
+                            .getter = getReadonly,
+                        },
+                    ),
+                },
+            );
+        };
     };
 
     pub const signals = struct {
@@ -673,6 +693,16 @@ pub const Surface = extern struct {
 
         /// The context for this surface (window, tab, or split)
         context: apprt.surface.NewSurfaceContext = .window,
+
+        /// Whether primary paste (middle-click paste) is enabled.
+        gtk_enable_primary_paste: bool = true,
+
+        /// How much pending horizontal scroll do we have?
+        pending_horizontal_scroll: f64 = 0.0,
+
+        /// Timer to reset the amount of horizontal scroll if the user
+        /// stops scrolling.
+        pending_horizontal_scroll_reset: ?c_uint = null,
 
         pub var offset: c_int = 0;
     };
@@ -1102,6 +1132,20 @@ pub const Surface = extern struct {
         return true;
     }
 
+    /// Get the readonly state from the core surface.
+    pub fn getReadonly(self: *Self) bool {
+        const priv: *Private = self.private();
+        const surface = priv.core_surface orelse return false;
+        return surface.readonly;
+    }
+
+    /// Notify anyone interested that the readonly status has changed.
+    pub fn setReadonly(self: *Self, _: apprt.Action.Value(.readonly)) bool {
+        self.as(gobject.Object).notifyByPspec(properties.readonly.impl.param_spec);
+
+        return true;
+    }
+
     /// Key press event (press or release).
     ///
     /// At a high level, we want to construct an `input.KeyEvent` and
@@ -1511,19 +1555,17 @@ pub const Surface = extern struct {
         const xft_dpi_scale = xft_scale: {
             // gtk-xft-dpi is font DPI multiplied by 1024. See
             // https://docs.gtk.org/gtk4/property.Settings.gtk-xft-dpi.html
-            const settings = gtk.Settings.getDefault() orelse break :xft_scale 1.0;
-            var value = std.mem.zeroes(gobject.Value);
-            defer value.unset();
-            _ = value.init(gobject.ext.typeFor(c_int));
-            settings.as(gobject.Object).getProperty("gtk-xft-dpi", &value);
-            const gtk_xft_dpi = value.getInt();
+            const gtk_xft_dpi = gsettings.get(.@"gtk-xft-dpi") orelse {
+                log.warn("gtk-xft-dpi was not set, using default value", .{});
+                break :xft_scale 1.0;
+            };
 
             // Use a value of 1.0 for the XFT DPI scale if the setting is <= 0
             // See:
             // https://gitlab.gnome.org/GNOME/libadwaita/-/commit/a7738a4d269bfdf4d8d5429ca73ccdd9b2450421
             // https://gitlab.gnome.org/GNOME/libadwaita/-/commit/9759d3fd81129608dd78116001928f2aed974ead
             if (gtk_xft_dpi <= 0) {
-                log.warn("gtk-xft-dpi was not set, using default value", .{});
+                log.warn("gtk-xft-dpi has invalid value ({}), using default", .{gtk_xft_dpi});
                 break :xft_scale 1.0;
             }
 
@@ -1767,6 +1809,9 @@ pub const Surface = extern struct {
         priv.im_composing = false;
         priv.im_len = 0;
 
+        // Read GTK primary paste setting
+        priv.gtk_enable_primary_paste = gsettings.get(.@"gtk-enable-primary-paste") orelse true;
+
         // Set up to handle items being dropped on our surface. Files can be dropped
         // from Nautilus and strings can be dropped from many programs. The order
         // of these types matter.
@@ -1840,6 +1885,13 @@ pub const Surface = extern struct {
                 log.warn("unable to remove idle source", .{});
             }
             priv.idle_rechild = null;
+        }
+
+        if (priv.pending_horizontal_scroll_reset) |v| {
+            if (glib.Source.remove(v) == 0) {
+                log.warn("unable to remove pending horizontal scroll reset source", .{});
+            }
+            priv.pending_horizontal_scroll_reset = null;
         }
 
         // This works around a GTK double-free bug where if you bind
@@ -2091,7 +2143,7 @@ pub const Surface = extern struct {
         self.as(gobject.Object).notifyByPspec(properties.@"error".impl.param_spec);
     }
 
-    pub fn setSearchActive(self: *Self, active: bool) void {
+    pub fn setSearchActive(self: *Self, active: bool, needle: [:0]const u8) void {
         const priv = self.private();
         var value = gobject.ext.Value.newFrom(active);
         defer value.unset();
@@ -2100,6 +2152,10 @@ pub const Surface = extern struct {
             SearchOverlay.properties.active.name,
             &value,
         );
+
+        if (!std.mem.eql(u8, needle, "")) {
+            priv.search_overlay.setSearchContents(needle);
+        }
 
         if (active) {
             priv.search_overlay.grabFocus();
@@ -2681,6 +2737,11 @@ pub const Surface = extern struct {
 
         // Report the event
         const button = translateMouseButton(gesture.as(gtk.GestureSingle).getCurrentButton());
+
+        if (button == .middle and !priv.gtk_enable_primary_paste) {
+            return;
+        }
+
         const consumed = consumed: {
             const gtk_mods = event.getModifierState();
             const mods = gtk_key.translateMods(gtk_mods);
@@ -2731,6 +2792,10 @@ pub const Surface = extern struct {
         const surface = priv.core_surface orelse return;
         const gtk_mods = event.getModifierState();
         const button = translateMouseButton(gesture.as(gtk.GestureSingle).getCurrentButton());
+
+        if (button == .middle and !priv.gtk_enable_primary_paste) {
+            return;
+        }
 
         const mods = gtk_key.translateMods(gtk_mods);
         const consumed = surface.mouseButtonCallback(
@@ -2828,27 +2893,27 @@ pub const Surface = extern struct {
         }
     }
 
-    fn ecMouseScrollPrecisionBegin(
+    fn ecMouseScrollVerticalPrecisionBegin(
         _: *gtk.EventControllerScroll,
         self: *Self,
     ) callconv(.c) void {
         self.private().precision_scroll = true;
     }
 
-    fn ecMouseScrollPrecisionEnd(
+    fn ecMouseScrollVerticalPrecisionEnd(
         _: *gtk.EventControllerScroll,
         self: *Self,
     ) callconv(.c) void {
         self.private().precision_scroll = false;
     }
 
-    fn ecMouseScroll(
+    fn ecMouseScrollVertical(
         _: *gtk.EventControllerScroll,
         x: f64,
         y: f64,
         self: *Self,
     ) callconv(.c) c_int {
-        const priv = self.private();
+        const priv: *Private = self.private();
         const surface = priv.core_surface orelse return 0;
 
         // Multiply precision scrolls by 10 to get a better response from
@@ -2873,6 +2938,57 @@ pub const Surface = extern struct {
         };
 
         return 1;
+    }
+
+    fn ecMouseScrollHorizontal(
+        ec: *gtk.EventControllerScroll,
+        x: f64,
+        _: f64,
+        self: *Self,
+    ) callconv(.c) c_int {
+        const priv: *Private = self.private();
+
+        switch (ec.getUnit()) {
+            .surface => {},
+            .wheel => return @intFromBool(false),
+            else => return @intFromBool(false),
+        }
+
+        priv.pending_horizontal_scroll += x;
+
+        if (@abs(priv.pending_horizontal_scroll) < 120) {
+            if (priv.pending_horizontal_scroll_reset) |v| {
+                _ = glib.Source.remove(v);
+                priv.pending_horizontal_scroll_reset = null;
+            }
+            priv.pending_horizontal_scroll_reset = glib.timeoutAdd(500, ecMouseScrollHorizontalReset, self);
+            return @intFromBool(true);
+        }
+
+        _ = self.as(gtk.Widget).activateAction(
+            if (priv.pending_horizontal_scroll < 0.0)
+                "tab.next-page"
+            else
+                "tab.previous-page",
+            null,
+        );
+
+        if (priv.pending_horizontal_scroll_reset) |v| {
+            _ = glib.Source.remove(v);
+            priv.pending_horizontal_scroll_reset = null;
+        }
+
+        priv.pending_horizontal_scroll = 0.0;
+
+        return @intFromBool(true);
+    }
+
+    fn ecMouseScrollHorizontalReset(ud: ?*anyopaque) callconv(.c) c_int {
+        const self: *Self = @ptrCast(@alignCast(ud orelse return @intFromBool(glib.SOURCE_REMOVE)));
+        const priv: *Private = self.private();
+        priv.pending_horizontal_scroll = 0.0;
+        priv.pending_horizontal_scroll_reset = null;
+        return @intFromBool(glib.SOURCE_REMOVE);
     }
 
     fn imPreeditStart(
@@ -3413,9 +3529,10 @@ pub const Surface = extern struct {
             class.bindTemplateCallback("mouse_up", &gcMouseUp);
             class.bindTemplateCallback("mouse_motion", &ecMouseMotion);
             class.bindTemplateCallback("mouse_leave", &ecMouseLeave);
-            class.bindTemplateCallback("scroll", &ecMouseScroll);
-            class.bindTemplateCallback("scroll_begin", &ecMouseScrollPrecisionBegin);
-            class.bindTemplateCallback("scroll_end", &ecMouseScrollPrecisionEnd);
+            class.bindTemplateCallback("scroll_vertical", &ecMouseScrollVertical);
+            class.bindTemplateCallback("scroll_vertical_begin", &ecMouseScrollVerticalPrecisionBegin);
+            class.bindTemplateCallback("scroll_vertical_end", &ecMouseScrollVerticalPrecisionEnd);
+            class.bindTemplateCallback("scroll_horizontal", &ecMouseScrollHorizontal);
             class.bindTemplateCallback("drop", &dtDrop);
             class.bindTemplateCallback("gl_realize", &glareaRealize);
             class.bindTemplateCallback("gl_unrealize", &glareaUnrealize);
@@ -3462,6 +3579,7 @@ pub const Surface = extern struct {
                 properties.@"title-override".impl,
                 properties.zoom.impl,
                 properties.@"is-split".impl,
+                properties.readonly.impl,
 
                 // For Gtk.Scrollable
                 properties.hadjustment.impl,
