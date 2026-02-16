@@ -1,8 +1,8 @@
 import SwiftUI
 import AppKit
 
-/// Warp-inspired adaptive theme system that derives colors from terminal background
-/// or system appearance. Uses alpha-based opacity layering for surface hierarchy.
+/// JetBrains-inspired adaptive theme system that derives colors from terminal background
+/// or system appearance. Uses warm neutral grays with compact density.
 ///
 /// Color derivation strategy:
 /// 1. Determine if base is light or dark via luminance
@@ -50,10 +50,10 @@ struct AdaptiveTheme: Equatable {
 
     // MARK: - Default Palettes
 
-    // Dark palette (Warp/GitHub dark inspired)
-    private static let darkBase = NSColor(red: 0.051, green: 0.067, blue: 0.090, alpha: 1.0) // #0D1117
+    // Dark palette (JetBrains New UI Dark / Darcula)
+    private static let darkBase = NSColor(red: 0.169, green: 0.176, blue: 0.188, alpha: 1.0) // #2B2D30
 
-    // Light palette (Warp light inspired)
+    // Light palette (JetBrains New UI Light)
     private static let lightBase = NSColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0) // #FFFFFF
 
     // MARK: - Background Colors
@@ -65,36 +65,40 @@ struct AdaptiveTheme: Equatable {
         }
         return isDark
             ? Self.darkBase
-            : NSColor(red: 0.984, green: 0.988, blue: 0.992, alpha: 1.0) // #FBFCFD
+            : NSColor(red: 0.969, green: 0.973, blue: 0.980, alpha: 1.0) // #F7F8FA
     }
 
     /// Elevated surface (headers, toolbars, cards)
     var surfaceElevated: NSColor {
         isDark
-            ? base.blendedOverlay(white: 0.05)
-            : NSColor(red: 0.965, green: 0.973, blue: 0.980, alpha: 1.0) // #F6F8FA
+            ? base.blendedOverlay(white: 0.04)
+            : NSColor(red: 0.922, green: 0.929, blue: 0.941, alpha: 1.0) // #EBEDF0
     }
 
     /// Hover state surface
     var surfaceHover: NSColor {
         isDark
             ? base.blendedOverlay(white: 0.08)
-            : NSColor(red: 0.918, green: 0.933, blue: 0.949, alpha: 1.0) // #EAEEF2
+            : NSColor(red: 0.875, green: 0.882, blue: 0.898, alpha: 1.0) // #DFE1E5
     }
 
     /// Selection background (subtle)
     var selection: NSColor {
-        NSColor(red: 0.122, green: 0.435, blue: 0.922, alpha: isDark ? 0.2 : 0.12) // #1F6FEB
+        isDark
+            ? NSColor(red: 0.184, green: 0.396, blue: 0.792, alpha: 0.25) // #2F65CA
+            : NSColor(red: 0.208, green: 0.455, blue: 0.941, alpha: 0.12) // #3574F0
     }
 
     /// Active selection background (stronger)
     var selectionActive: NSColor {
-        NSColor(red: 0.122, green: 0.435, blue: 0.922, alpha: isDark ? 0.35 : 0.2) // #1F6FEB
+        isDark
+            ? NSColor(red: 0.184, green: 0.396, blue: 0.792, alpha: 0.45) // #2F65CA
+            : NSColor(red: 0.208, green: 0.455, blue: 0.941, alpha: 0.22) // #3574F0
     }
 
     /// Focus ring for keyboard navigation
     var focusRing: NSColor {
-        NSColor(red: 0.122, green: 0.435, blue: 0.922, alpha: 1.0) // #1F6FEB
+        NSColor(red: 0.208, green: 0.455, blue: 0.941, alpha: 1.0) // #3574F0
     }
 
     // MARK: - Border Colors
@@ -102,15 +106,15 @@ struct AdaptiveTheme: Equatable {
     /// Primary border/divider
     var border: NSColor {
         isDark
-            ? NSColor(red: 0.188, green: 0.212, blue: 0.239, alpha: 1.0) // #30363D
-            : NSColor(red: 0.820, green: 0.835, blue: 0.855, alpha: 1.0) // #D1D5DA
+            ? NSColor(red: 0.263, green: 0.271, blue: 0.290, alpha: 1.0) // #43454A
+            : NSColor(red: 0.831, green: 0.831, blue: 0.831, alpha: 1.0) // #D4D4D4
     }
 
     /// Subtle border (lighter)
     var borderSubtle: NSColor {
         isDark
-            ? NSColor(red: 0.129, green: 0.149, blue: 0.176, alpha: 1.0) // #21262D
-            : NSColor(red: 0.910, green: 0.920, blue: 0.933, alpha: 1.0) // #E8EBED
+            ? NSColor(red: 0.224, green: 0.231, blue: 0.251, alpha: 1.0) // #393B40
+            : NSColor(red: 0.922, green: 0.925, blue: 0.941, alpha: 1.0) // #EBECF0
     }
 
     /// Disabled border
@@ -123,22 +127,22 @@ struct AdaptiveTheme: Equatable {
     /// Primary text (highest contrast)
     var textPrimary: NSColor {
         isDark
-            ? NSColor(red: 0.902, green: 0.929, blue: 0.953, alpha: 1.0) // #E6EDF3
-            : NSColor(red: 0.141, green: 0.161, blue: 0.180, alpha: 1.0) // #24292E
+            ? NSColor(red: 0.737, green: 0.745, blue: 0.769, alpha: 1.0) // #BCBEC4
+            : NSColor(red: 0.118, green: 0.122, blue: 0.133, alpha: 1.0) // #1E1F22
     }
 
     /// Secondary text
     var textSecondary: NSColor {
         isDark
-            ? NSColor(red: 0.545, green: 0.580, blue: 0.620, alpha: 1.0) // #8B949E
-            : NSColor(red: 0.345, green: 0.376, blue: 0.412, alpha: 1.0) // #586069
+            ? NSColor(red: 0.435, green: 0.451, blue: 0.478, alpha: 1.0) // #6F737A
+            : NSColor(red: 0.435, green: 0.451, blue: 0.478, alpha: 1.0) // #6F737A
     }
 
     /// Muted text (lowest contrast)
     var textMuted: NSColor {
         isDark
-            ? NSColor(red: 0.431, green: 0.463, blue: 0.506, alpha: 1.0) // #6E7681
-            : NSColor(red: 0.416, green: 0.451, blue: 0.490, alpha: 1.0) // #6A737D
+            ? NSColor(red: 0.353, green: 0.365, blue: 0.388, alpha: 1.0) // #5A5D63
+            : NSColor(red: 0.549, green: 0.549, blue: 0.549, alpha: 1.0) // #8C8C8C
     }
 
     /// Disabled text
@@ -148,46 +152,46 @@ struct AdaptiveTheme: Equatable {
 
     // MARK: - Accent Colors
 
-    /// Primary accent (blue)
+    /// Primary accent (JetBrains blue)
     var accent: NSColor {
         isDark
-            ? NSColor(red: 0.345, green: 0.651, blue: 1.0, alpha: 1.0) // #58A6FF
-            : NSColor(red: 0.122, green: 0.435, blue: 0.922, alpha: 1.0) // #1F6FEB
+            ? NSColor(red: 0.310, green: 0.533, blue: 0.933, alpha: 1.0) // #4F88EE
+            : NSColor(red: 0.208, green: 0.455, blue: 0.941, alpha: 1.0) // #3574F0
     }
 
     /// Folder icon color
     var folderIcon: NSColor {
         isDark
-            ? NSColor(red: 0.329, green: 0.682, blue: 1.0, alpha: 1.0) // #54AEFF
-            : NSColor(red: 0.200, green: 0.494, blue: 0.863, alpha: 1.0) // #337EDB
+            ? NSColor(red: 0.424, green: 0.604, blue: 0.937, alpha: 1.0) // #6C9AEF
+            : NSColor(red: 0.290, green: 0.525, blue: 0.784, alpha: 1.0) // #4A86C8
     }
 
     /// Markdown/file icon color
     var markdownIcon: NSColor {
         isDark
-            ? NSColor(red: 0.969, green: 0.506, blue: 0.400, alpha: 1.0) // #F78166
-            : NSColor(red: 0.820, green: 0.341, blue: 0.224, alpha: 1.0) // #D15739
+            ? NSColor(red: 0.780, green: 0.490, blue: 0.733, alpha: 1.0) // #C77DBB
+            : NSColor(red: 0.596, green: 0.463, blue: 0.667, alpha: 1.0) // #9876AA
     }
 
     /// Success color
     var success: NSColor {
         isDark
-            ? NSColor(red: 0.247, green: 0.725, blue: 0.314, alpha: 1.0) // #3FB950
-            : NSColor(red: 0.161, green: 0.624, blue: 0.224, alpha: 1.0) // #289F39
+            ? NSColor(red: 0.286, green: 0.612, blue: 0.329, alpha: 1.0) // #499C54
+            : NSColor(red: 0.349, green: 0.659, blue: 0.412, alpha: 1.0) // #59A869
     }
 
     /// Danger color
     var danger: NSColor {
         isDark
-            ? NSColor(red: 1.0, green: 0.420, blue: 0.420, alpha: 1.0) // #FF6B6B
-            : NSColor(red: 0.871, green: 0.243, blue: 0.243, alpha: 1.0) // #DE3E3E
+            ? NSColor(red: 0.969, green: 0.329, blue: 0.392, alpha: 1.0) // #F75464
+            : NSColor(red: 0.859, green: 0.345, blue: 0.376, alpha: 1.0) // #DB5860
     }
 
     /// Warning color
     var warning: NSColor {
         isDark
-            ? NSColor(red: 1.0, green: 0.651, blue: 0.341, alpha: 1.0) // #FFA657
-            : NSColor(red: 0.863, green: 0.502, blue: 0.161, alpha: 1.0) // #DC8029
+            ? NSColor(red: 0.910, green: 0.639, blue: 0.239, alpha: 1.0) // #E8A33D
+            : NSColor(red: 0.745, green: 0.569, blue: 0.090, alpha: 1.0) // #BE9117
     }
 
     // MARK: - Icon Colors
@@ -226,7 +230,7 @@ struct AdaptiveTheme: Equatable {
     var dangerC: Color { Color(danger) }
     var warningC: Color { Color(warning) }
 
-    // MARK: - Gradients (Warp-inspired)
+    // MARK: - Gradients
 
     /// Subtle header gradient for sidebar headers
     var headerGradient: LinearGradient {
@@ -240,48 +244,48 @@ struct AdaptiveTheme: Equatable {
         )
     }
 
-    /// Glass-like gradient for elevated surfaces
+    /// Flat toolbar gradient (JetBrains uses minimal depth)
     var glassGradient: LinearGradient {
         LinearGradient(
             stops: [
-                .init(color: surfaceElevatedC.opacity(0.8), location: 0.0),
-                .init(color: surfaceElevatedC.opacity(0.4), location: 1.0)
+                .init(color: surfaceElevatedC, location: 0.0),
+                .init(color: surfaceElevatedC.opacity(0.9), location: 1.0)
             ],
             startPoint: .top,
             endPoint: .bottom
         )
     }
 
-    // MARK: - Spacing (Theme-Independent)
+    // MARK: - Spacing (Compact Density)
 
     static let spacing4: CGFloat = 4
-    static let spacing6: CGFloat = 6
-    static let spacing8: CGFloat = 8
-    static let spacing10: CGFloat = 10
-    static let spacing12: CGFloat = 12
-    static let spacing16: CGFloat = 16
+    static let spacing6: CGFloat = 5
+    static let spacing8: CGFloat = 7
+    static let spacing10: CGFloat = 9
+    static let spacing12: CGFloat = 11
+    static let spacing16: CGFloat = 14
 
-    // MARK: - Corner Radius
+    // MARK: - Corner Radius (JetBrains: nearly square)
 
-    static let radiusSmall: CGFloat = 4
-    static let radiusMedium: CGFloat = 6
-    static let radiusLarge: CGFloat = 8
+    static let radiusSmall: CGFloat = 3
+    static let radiusMedium: CGFloat = 4
+    static let radiusLarge: CGFloat = 6
 
-    // MARK: - Animation Timing
+    // MARK: - Animation Timing (Snappy, minimal motion)
 
-    static let animationFast: Double = 0.10   // Warp uses 100ms for hover
-    static let animationNormal: Double = 0.20
-    static let animationSlow: Double = 0.30
+    static let animationFast: Double = 0.08
+    static let animationNormal: Double = 0.15
+    static let animationSlow: Double = 0.25
 
-    static let springResponse: Double = 0.30
-    static let springDamping: Double = 0.75
+    static let springResponse: Double = 0.25
+    static let springDamping: Double = 0.85
 }
 
 // MARK: - NSColor Extensions for Theme Derivation
 // Note: `luminance` and `hexString` are already defined in OSColor+Extension.swift
 
 extension NSColor {
-    /// Blend with white overlay at given opacity (Warp-style surface layering)
+    /// Blend with white overlay at given opacity (surface layering)
     func blendedOverlay(white opacity: CGFloat) -> NSColor {
         guard let base = usingColorSpace(.sRGB) else { return self }
         let r = base.redComponent + (1.0 - base.redComponent) * opacity
