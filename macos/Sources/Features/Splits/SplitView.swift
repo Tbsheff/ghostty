@@ -32,7 +32,7 @@ struct SplitView<L: View, R: View>: View {
 
     /// The visible size of the splitter, in points. The invisible size is a transparent hitbox that can still
     /// be used for getting a resize handle. The total width/height of the splitter is the sum of both.
-    private let splitterVisibleSize: CGFloat = 1
+    private let splitterVisibleSize: CGFloat = 4
     private let splitterInvisibleSize: CGFloat = 6
 
     var body: some View {

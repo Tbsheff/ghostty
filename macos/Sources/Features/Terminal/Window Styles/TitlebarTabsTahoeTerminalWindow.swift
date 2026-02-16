@@ -522,7 +522,7 @@ extension TitlebarTabsTahoeTerminalWindow {
             .modifier(AccessibilityIdentifierModifier(identifier: accessibilityIdentifier))
             .frame(width: 28, height: 22)
             .background(backgroundColor)
-            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium))
             .onHover { isHovered = $0 }
         }
 

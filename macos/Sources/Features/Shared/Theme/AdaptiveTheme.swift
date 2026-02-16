@@ -256,29 +256,29 @@ struct AdaptiveTheme: Equatable {
         )
     }
 
-    // MARK: - Spacing (Compact Density)
+    // MARK: - Spacing
 
     static let spacing4: CGFloat = 4
-    static let spacing6: CGFloat = 5
-    static let spacing8: CGFloat = 7
-    static let spacing10: CGFloat = 9
-    static let spacing12: CGFloat = 11
-    static let spacing16: CGFloat = 14
+    static let spacing6: CGFloat = 6
+    static let spacing8: CGFloat = 8
+    static let spacing10: CGFloat = 10
+    static let spacing12: CGFloat = 12
+    static let spacing16: CGFloat = 16
 
-    // MARK: - Corner Radius (JetBrains: nearly square)
+    // MARK: - Corner Radius
 
-    static let radiusSmall: CGFloat = 3
-    static let radiusMedium: CGFloat = 4
-    static let radiusLarge: CGFloat = 6
+    static let radiusSmall: CGFloat = 6
+    static let radiusMedium: CGFloat = 8
+    static let radiusLarge: CGFloat = 12
 
-    // MARK: - Animation Timing (Snappy, minimal motion)
+    // MARK: - Animation Timing
 
-    static let animationFast: Double = 0.08
-    static let animationNormal: Double = 0.15
-    static let animationSlow: Double = 0.25
+    static let animationFast: Double = 0.10
+    static let animationNormal: Double = 0.20
+    static let animationSlow: Double = 0.30
 
-    static let springResponse: Double = 0.25
-    static let springDamping: Double = 0.85
+    static let springResponse: Double = 0.30
+    static let springDamping: Double = 0.75
 }
 
 // MARK: - NSColor Extensions for Theme Derivation

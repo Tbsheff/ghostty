@@ -57,7 +57,7 @@ extension SplitView {
                 Color.clear
                     .frame(width: invisibleWidth, height: invisibleHeight)
                     .contentShape(Rectangle()) // Makes it hit testable for pointerStyle
-                Rectangle()
+                Capsule()
                     .fill(color)
                     .frame(width: visibleWidth, height: visibleHeight)
             }
