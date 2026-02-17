@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Approach B: Overlay with Breadcrumb</title>
+<style>
+  :root {
+    --bg: #2B2D30;
+    --surface-elevated: #313336;
+    --surface-hover: #3C3F41;
+    --text-primary: #BCBEC4;
+    --text-secondary: #6F737A;
+    --text-muted: #5A5D63;
+    --accent: #4F88EE;
+    --success: #499C54;
+    --danger: #F75464;
+    --border: #43454A;
+    --border-subtle: #393B40;
+    --font-ui: -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'SF Mono', Menlo, Monaco, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #1E1F22;
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px;
+    min-height: 100vh;
+  }
+
+  .page-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .sidebar {
+    width: 350px;
+    height: 85vh;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ─── Header ─── */
+  .sidebar-header {
+    height: 36px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg);
+    z-index: 2;
+  }
+
+  .header-tabs {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .header-tab {
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 2px 0;
+    border: none;
+    background: none;
+    font-family: var(--font-ui);
+    transition: color 0.15s;
+  }
+  .header-tab:hover { color: var(--text-primary); }
+  .header-tab.active {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .icon-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .icon-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  /* ─── Diff Content ─── */
+  .diff-content {
+    flex: 1;
+    overflow-y: auto;
+    position: relative;
+  }
+
+  .diff-content::-webkit-scrollbar { width: 6px; }
+  .diff-content::-webkit-scrollbar-track { background: transparent; }
+  .diff-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* File section */
+  .file-section {
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .file-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+    position: relative;
+  }
+  .file-header:hover {
+    background: var(--surface-hover);
+  }
+
+  .chevron {
+    font-size: 10px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+    width: 12px;
+    text-align: center;
+  }
+  .file-section.collapsed .chevron {
+    transform: rotate(-90deg);
+  }
+
+  .file-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+  }
+  .file-icon.zig { background: #F7A41D22; color: #F7A41D; }
+  .file-icon.md { background: #4F88EE22; color: #4F88EE; }
+  .file-icon.toml { background: #499C5422; color: #499C54; }
+
+  .file-path {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .file-stats {
+    display: flex;
+    gap: 6px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+  }
+  .stat-add { color: var(--success); }
+  .stat-del { color: var(--danger); }
+
+  .preview-btn {
+    width: 22px;
+    height: 22px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    border: none;
+    background: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 12px;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .preview-btn:hover { background: rgba(79, 136, 238, 0.15); }
+  .file-header:hover .preview-btn { display: flex; }
+
+  /* Diff lines */
+  .diff-lines {
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+  }
+  .file-section.collapsed .diff-lines {
+    max-height: 0 !important;
+  }
+
+  .diff-line {
+    display: flex;
+    align-items: stretch;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 20px;
+    min-height: 20px;
+  }
+
+  .diff-edge {
+    width: 4px;
+    flex-shrink: 0;
+  }
+  .diff-line.add .diff-edge { background: var(--success); }
+  .diff-line.del .diff-edge { background: var(--danger); }
+
+  .line-num {
+    width: 36px;
+    text-align: right;
+    padding-right: 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  .line-code {
+    flex: 1;
+    padding: 0 8px;
+    white-space: pre;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .diff-line.add { background: rgba(73, 156, 84, 0.08); }
+  .diff-line.del { background: rgba(247, 84, 100, 0.08); }
+  .diff-line.add .line-code { color: #6AAF6E; }
+  .diff-line.del .line-code { color: #E06C75; }
+  .diff-line.ctx .line-code { color: var(--text-secondary); }
+
+  /* syntax tokens */
+  .kw { color: #CF8E6D; }
+  .str { color: #6AAB73; }
+  .cmt { color: var(--text-muted); font-style: italic; }
+  .fn { color: #56A8F5; }
+  .num { color: #2AACB8; }
+  .type { color: #C77DBB; }
+  .punct { color: var(--text-secondary); }
+
+  /* ─── Scrim ─── */
+  .scrim {
+    position: absolute;
+    inset: 36px 0 0 0;
+    background: rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 5;
+  }
+  .scrim.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* ─── Overlay Sheet ─── */
+  .overlay-sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 85%;
+    background: var(--surface-elevated);
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.3s ease-out;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+  }
+  .overlay-sheet.open {
+    transform: translateY(0);
+  }
+  .overlay-sheet.closing {
+    transition: transform 0.25s ease-in;
+    transform: translateY(100%);
+  }
+
+  .drag-handle-area {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0 4px 0;
+    cursor: grab;
+  }
+  .drag-handle {
+    width: 40px;
+    height: 4px;
+    background: var(--text-muted);
+    border-radius: 2px;
+  }
+
+  .overlay-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 12px 8px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .breadcrumb {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .overlay-close {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .overlay-close:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .overlay-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+  .overlay-body::-webkit-scrollbar { width: 6px; }
+  .overlay-body::-webkit-scrollbar-track { background: transparent; }
+  .overlay-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ─── Markdown Rendering ─── */
+  .md h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .md h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 16px 0 6px 0;
+  }
+  .md h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 12px 0 4px 0;
+  }
+  .md p {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+  }
+  .md code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: rgba(255,255,255,0.06);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #C77DBB;
+  }
+  .md pre {
+    background: var(--bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 8px 0 12px 0;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-primary);
+  }
+  .md pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+  }
+  .md ul, .md ol {
+    padding-left: 20px;
+    margin-bottom: 10px;
+  }
+  .md li {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+  }
+  .md strong { color: var(--text-primary); }
+  .md a { color: var(--accent); text-decoration: none; }
+  .md a:hover { text-decoration: underline; }
+  .md blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 4px 12px;
+    margin: 8px 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  /* ─── Width Slider ─── */
+  .slider-container {
+    margin-top: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .slider-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .slider-container input[type="range"] {
+    width: 200px;
+    accent-color: var(--accent);
+  }
+
+  .slider-value {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    min-width: 40px;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-label">Approach B: Overlay with Breadcrumb</div>
+
+<div class="sidebar" id="sidebar">
+  <!-- Header -->
+  <div class="sidebar-header">
+    <div class="header-tabs">
+      <button class="header-tab active" id="tabUnstaged">Unstaged</button>
+      <button class="header-tab" id="tabStaged">Staged</button>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" title="Inline diff">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="3" width="12" height="2" rx="0.5" fill="currentColor"/><rect x="1" y="7" width="12" height="2" rx="0.5" fill="currentColor"/><rect x="1" y="11" width="8" height="2" rx="0.5" fill="currentColor"/></svg>
+      </button>
+      <button class="icon-btn" title="Side-by-side diff">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="2" width="5" height="10" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/><rect x="8" y="2" width="5" height="10" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
+      </button>
+      <button class="icon-btn" title="Close">&#x2715;</button>
+    </div>
+  </div>
+
+  <!-- Diff Content -->
+  <div class="diff-content" id="diffContent">
+
+    <!-- File 1: src/terminal/Screen.zig -->
+    <div class="file-section" id="file1">
+      <div class="file-header" onclick="toggleFile('file1')">
+        <span class="chevron">&#x25BC;</span>
+        <span class="file-icon zig">Z</span>
+        <span class="file-path">src/terminal/Screen.zig</span>
+        <span class="file-stats">
+          <span class="stat-add">+24</span>
+          <span class="stat-del">-8</span>
+        </span>
+      </div>
+      <div class="diff-lines" style="max-height:500px">
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">142</div><div class="line-code"><span class="kw">const</span> <span class="fn">Self</span> <span class="punct">=</span> <span class="punct">@</span><span class="fn">This</span><span class="punct">();</span></div></div>
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">143</div><div class="line-code"><span class="cmt">/// The active page list for this screen.</span></div></div>
+        <div class="diff-line del"><div class="diff-edge"></div><div class="line-num">144</div><div class="line-code"><span class="kw">pub</span> pages: PageList,</div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">144</div><div class="line-code"><span class="kw">pub</span> pages: <span class="type">PageList</span>,</div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">145</div><div class="line-code"><span class="kw">pub</span> viewport_offset: <span class="type">u32</span> <span class="punct">=</span> <span class="num">0</span>,</div></div>
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">146</div><div class="line-code"></div></div>
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">147</div><div class="line-code"><span class="cmt">/// Initialize a new screen with the given dimensions.</span></div></div>
+        <div class="diff-line del"><div class="diff-edge"></div><div class="line-num">148</div><div class="line-code"><span class="kw">pub fn</span> <span class="fn">init</span>(alloc: Allocator, cols: <span class="type">u32</span>, rows: <span class="type">u32</span>) !Self {</div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">148</div><div class="line-code"><span class="kw">pub fn</span> <span class="fn">init</span>(alloc: <span class="type">Allocator</span>, opts: <span class="type">InitOptions</span>) !<span class="fn">Self</span> {</div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">149</div><div class="line-code">    <span class="kw">const</span> cols <span class="punct">=</span> opts.cols;</div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">150</div><div class="line-code">    <span class="kw">const</span> rows <span class="punct">=</span> opts.rows;</div></div>
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">151</div><div class="line-code">    <span class="kw">var</span> pages <span class="punct">=</span> <span class="kw">try</span> <span class="type">PageList</span>.<span class="fn">init</span>(alloc, cols, rows);</div></div>
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">152</div><div class="line-code">    <span class="kw">errdefer</span> pages.<span class="fn">deinit</span>();</div></div>
+      </div>
+    </div>
+
+    <!-- File 2: README.md -->
+    <div class="file-section" id="file2">
+      <div class="file-header" onclick="toggleFile('file2')">
+        <span class="chevron">&#x25BC;</span>
+        <span class="file-icon md">M</span>
+        <span class="file-path">README.md</span>
+        <span class="file-stats">
+          <span class="stat-add">+12</span>
+          <span class="stat-del">-3</span>
+        </span>
+        <button class="preview-btn" onclick="event.stopPropagation(); openOverlay()" title="Preview markdown">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 3C3.5 3 1 7 1 7s2.5 4 6 4 6-4 6-4-2.5-4-6-4z" stroke="currentColor" stroke-width="1.2" fill="none"/><circle cx="7" cy="7" r="2" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
+        </button>
+      </div>
+      <div class="diff-lines" style="max-height:500px">
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">1</div><div class="line-code"><span class="punct">#</span> Ghostty</div></div>
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">2</div><div class="line-code"></div></div>
+        <div class="diff-line del"><div class="diff-edge"></div><div class="line-num">3</div><div class="line-code">A fast, feature-rich terminal emulator.</div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">3</div><div class="line-code">A fast, feature-rich, and cross-platform terminal emulator</div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">4</div><div class="line-code">that uses platform-native UI and GPU acceleration.</div></div>
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">5</div><div class="line-code"></div></div>
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">6</div><div class="line-code"><span class="punct">##</span> Features</div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">7</div><div class="line-code"></div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">8</div><div class="line-code"><span class="punct">-</span> Native macOS and Linux support</div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">9</div><div class="line-code"><span class="punct">-</span> GPU-accelerated rendering via Metal/OpenGL</div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">10</div><div class="line-code"><span class="punct">-</span> Comprehensive VT emulation</div></div>
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">11</div><div class="line-code"></div></div>
+        <div class="diff-line del"><div class="diff-edge"></div><div class="line-num">12</div><div class="line-code"><span class="punct">##</span> Building</div></div>
+        <div class="diff-line del"><div class="diff-edge"></div><div class="line-num">13</div><div class="line-code">Run `zig build` to compile.</div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">12</div><div class="line-code"><span class="punct">##</span> Getting Started</div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">13</div><div class="line-code"></div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">14</div><div class="line-code">Run `zig build run` to compile and launch.</div></div>
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">15</div><div class="line-code"></div></div>
+      </div>
+    </div>
+
+    <!-- File 3: build.zig.zon -->
+    <div class="file-section" id="file3">
+      <div class="file-header" onclick="toggleFile('file3')">
+        <span class="chevron">&#x25BC;</span>
+        <span class="file-icon toml">Z</span>
+        <span class="file-path">build.zig.zon</span>
+        <span class="file-stats">
+          <span class="stat-add">+3</span>
+          <span class="stat-del">-1</span>
+        </span>
+      </div>
+      <div class="diff-lines" style="max-height:500px">
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">8</div><div class="line-code"><span class="punct">.</span>name <span class="punct">=</span> <span class="str">"ghostty"</span>,</div></div>
+        <div class="diff-line del"><div class="diff-edge"></div><div class="line-num">9</div><div class="line-code"><span class="punct">.</span>version <span class="punct">=</span> <span class="str">"1.0.0"</span>,</div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">9</div><div class="line-code"><span class="punct">.</span>version <span class="punct">=</span> <span class="str">"1.1.0"</span>,</div></div>
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">10</div><div class="line-code"><span class="punct">.</span>minimum_zig_version <span class="punct">=</span> <span class="str">"0.15.2"</span>,</div></div>
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">11</div><div class="line-code"></div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">12</div><div class="line-code"><span class="cmt">// New dependency for cross-platform rendering</span></div></div>
+        <div class="diff-line add"><div class="diff-edge"></div><div class="line-num">13</div><div class="line-code"><span class="punct">.</span>paths <span class="punct">=</span> <span class="punct">.{</span> <span class="str">"src"</span>, <span class="str">"build.zig"</span>, <span class="str">"build.zig.zon"</span> <span class="punct">},</span></div></div>
+        <div class="diff-line ctx"><div class="diff-edge"></div><div class="line-num">14</div><div class="line-code"><span class="punct">}</span></div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Scrim -->
+  <div class="scrim" id="scrim" onclick="closeOverlay()"></div>
+
+  <!-- Overlay Sheet -->
+  <div class="overlay-sheet" id="overlaySheet">
+    <div class="drag-handle-area" id="dragHandleArea">
+      <div class="drag-handle"></div>
+    </div>
+    <div class="overlay-header">
+      <div class="breadcrumb">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="flex-shrink:0"><rect x="2" y="1" width="10" height="12" rx="1.5" stroke="var(--text-muted)" stroke-width="1.1" fill="none"/><line x1="4.5" y1="4" x2="9.5" y2="4" stroke="var(--text-muted)" stroke-width="1"/><line x1="4.5" y1="6.5" x2="9.5" y2="6.5" stroke="var(--text-muted)" stroke-width="1"/><line x1="4.5" y1="9" x2="7.5" y2="9" stroke="var(--text-muted)" stroke-width="1"/></svg>
+        README.md
+      </div>
+      <button class="overlay-close" onclick="closeOverlay()" title="Close preview">&#x2715;</button>
+    </div>
+    <div class="overlay-body">
+      <div class="md">
+        <h1>Ghostty</h1>
+        <p>A fast, feature-rich, and cross-platform terminal emulator that uses platform-native UI and GPU acceleration.</p>
+
+        <h2>Features</h2>
+        <ul>
+          <li><strong>Native macOS and Linux support</strong> &mdash; uses SwiftUI on macOS and GTK4 on Linux for truly native experiences</li>
+          <li><strong>GPU-accelerated rendering</strong> via Metal (macOS) and OpenGL (Linux)</li>
+          <li><strong>Comprehensive VT emulation</strong> &mdash; xterm-compatible with modern extensions</li>
+          <li><strong>Splits &amp; tabs</strong> &mdash; flexible window management built in</li>
+          <li><strong>Configurable</strong> &mdash; extensive configuration system with hot-reload</li>
+        </ul>
+
+        <h2>Getting Started</h2>
+        <p>Ghostty requires <strong>Zig 0.15.2</strong> or later. To build and run:</p>
+        <pre><code>zig build run</code></pre>
+        <p>For a release build:</p>
+        <pre><code>zig build -Doptimize=ReleaseFast</code></pre>
+
+        <h3>macOS</h3>
+        <p>On macOS, Ghostty builds a native SwiftUI application. You need <strong>Xcode 26</strong> and the <strong>macOS 26 SDK</strong>. Make sure the correct Xcode is selected:</p>
+        <pre><code>sudo xcode-select --switch /Applications/Xcode.app</code></pre>
+
+        <h3>Linux</h3>
+        <p>On Linux, Ghostty uses GTK4. You&rsquo;ll need <code>blueprint-compiler</code> &gt;= 0.16.0 when building from the Git checkout.</p>
+
+        <h2>Architecture</h2>
+        <p>The core terminal emulation and rendering logic lives in <code>src/</code> as shared Zig code. Platform-specific UI code is in <code>macos/</code> (SwiftUI) and <code>src/apprt/gtk/</code> (GTK4).</p>
+
+        <blockquote>Ghostty uses a dual-renderer architecture: Metal on macOS, OpenGL on Linux. The terminal emulation layer is completely independent of rendering.</blockquote>
+
+        <h2>Configuration</h2>
+        <p>Ghostty is configured via a config file. See <a href="#">the documentation</a> for full details. Key features:</p>
+        <ul>
+          <li>Hot-reload on save</li>
+          <li>Backward compatibility mapping</li>
+          <li>Per-OS overrides</li>
+        </ul>
+
+        <h2>Contributing</h2>
+        <p>Contributions are welcome! Please read the contributing guide before submitting PRs. All AI-assisted code must be disclosed.</p>
+
+        <h2>License</h2>
+        <p>MIT License. See <code>LICENSE</code> for details.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Width Slider -->
+<div class="slider-container">
+  <span class="slider-label">Width</span>
+  <input type="range" id="widthSlider" min="280" max="600" value="350">
+  <span class="slider-value" id="widthValue">350px</span>
+</div>
+
+<script>
+  const sidebar = document.getElementById('sidebar');
+  const scrim = document.getElementById('scrim');
+  const overlaySheet = document.getElementById('overlaySheet');
+  const widthSlider = document.getElementById('widthSlider');
+  const widthValue = document.getElementById('widthValue');
+
+  // Tab switching
+  const tabUnstaged = document.getElementById('tabUnstaged');
+  const tabStaged = document.getElementById('tabStaged');
+  tabUnstaged.addEventListener('click', () => {
+    tabUnstaged.classList.add('active');
+    tabStaged.classList.remove('active');
+  });
+  tabStaged.addEventListener('click', () => {
+    tabStaged.classList.add('active');
+    tabUnstaged.classList.remove('active');
+  });
+
+  // Collapse / expand files
+  function toggleFile(id) {
+    document.getElementById(id).classList.toggle('collapsed');
+  }
+
+  // Overlay open/close
+  function openOverlay() {
+    scrim.classList.add('visible');
+    overlaySheet.classList.remove('closing');
+    overlaySheet.classList.add('open');
+  }
+
+  function closeOverlay() {
+    overlaySheet.classList.add('closing');
+    overlaySheet.classList.remove('open');
+    scrim.classList.remove('visible');
+    // Clean up closing class after animation
+    setTimeout(() => {
+      overlaySheet.classList.remove('closing');
+    }, 250);
+  }
+
+  // Drag-to-dismiss
+  let dragStartY = 0;
+  let isDragging = false;
+  let sheetTranslate = 0;
+
+  const dragArea = document.getElementById('dragHandleArea');
+
+  dragArea.addEventListener('mousedown', (e) => {
+    if (!overlaySheet.classList.contains('open')) return;
+    isDragging = true;
+    dragStartY = e.clientY;
+    sheetTranslate = 0;
+    overlaySheet.style.transition = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const dy = e.clientY - dragStartY;
+    if (dy > 0) {
+      sheetTranslate = dy;
+      overlaySheet.style.transform = `translateY(${dy}px)`;
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    overlaySheet.style.transition = '';
+    if (sheetTranslate > 120) {
+      closeOverlay();
+    } else {
+      overlaySheet.style.transform = '';
+    }
+  });
+
+  // Width slider
+  widthSlider.addEventListener('input', () => {
+    const w = widthSlider.value;
+    sidebar.style.width = w + 'px';
+    widthValue.textContent = w + 'px';
+  });
+</script>
+
+</body>
+</html>
