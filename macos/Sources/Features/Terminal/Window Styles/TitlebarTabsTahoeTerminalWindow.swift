@@ -43,6 +43,25 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         return view
     }()
 
+    /// Custom SwiftUI tab bar that replaces the native NSTabBar
+    private lazy var customTabBarHostingView: NSHostingView<CustomTabBarView> = {
+        let view = NSHostingView(rootView: CustomTabBarView(
+            viewModel: viewModel,
+            onSelectTab: { [weak self] window in
+                window.makeKeyAndOrderFront(nil)
+            },
+            onCloseTab: { [weak self] window in
+                guard let controller = window.windowController as? TerminalController else { return }
+                controller.closeTab(nil)
+            },
+            onNewTab: { [weak self] in
+                self?.terminalController?.newTab(self)
+            }
+        ))
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+
     /// Titlebar tabs can't support the update accessory because of the way we layout
     /// the native tabs back into the menu bar.
     override var supportsUpdateAccessory: Bool { false }
@@ -67,6 +86,7 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.viewModel.title = self.title
+                self.refreshTabs()
             }
         }
     }
@@ -92,7 +112,8 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         // Check if we have a tab bar and set it up if we have to. See the comment
         // on this function to learn why we need to check this here.
         setupTabBar()
-        
+        refreshTabs()
+
         viewModel.isMainWindow = true
     }
 
@@ -227,12 +248,12 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
 
         // Find our clip view
         guard let clipView = tabBarView.firstSuperview(withClassName: "NSTitlebarAccessoryClipView") else { return }
-        guard let accessoryView = clipView.subviews[safe: 0] else { return }
         guard let toolbarView = titlebarView.firstDescendant(withClassName: "NSToolbarView") else { return }
 
-        // Make sure tabBar's height won't be stretched
-        guard let newTabButton = titlebarView.firstDescendant(withClassName: "NSTabBarNewTabButton") else { return }
-        tabBarView.frame.size.height = newTabButton.frame.width
+        // Hide the native tab bar visually but keep it in the hierarchy
+        // so macOS tab group internals (drag-to-new-window, etc.) still work.
+        tabBarView.alphaValue = 0
+        tabBarView.frame.size.height = 0
 
         // The container is the view that we'll constrain our tab bar within.
         let container = toolbarView
@@ -253,7 +274,6 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             fileBrowserButton.removeFromSuperview()
             container.addSubview(fileBrowserButton)
         }
-        // Ensure button is on top
         fileBrowserButton.layer?.zPosition = 1000
 
         // Add markdown button on the right
@@ -261,13 +281,17 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             markdownButton.removeFromSuperview()
             container.addSubview(markdownButton)
         }
-        // Ensure button is on top
         markdownButton.layer?.zPosition = 1000
 
-        // Constrain the accessory clip view (the parent of the accessory view
-        // usually that clips the children) to the container view.
+        // Add custom tab bar view (replacing native tab bar)
+        if customTabBarHostingView.superview != container {
+            customTabBarHostingView.removeFromSuperview()
+            container.addSubview(customTabBarHostingView)
+        }
+        customTabBarHostingView.layer?.zPosition = 999
+
+        // Hide the native clip view (keep it but zero-sized so macOS internals work)
         clipView.translatesAutoresizingMaskIntoConstraints = false
-        accessoryView.translatesAutoresizingMaskIntoConstraints = false
 
         // Setup all our constraints - leave room for toggle buttons on left and right
         let tabBarLeftPadding = leftPadding + buttonWidth + buttonPadding
@@ -286,19 +310,19 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             markdownButton.widthAnchor.constraint(equalToConstant: 28),
             markdownButton.heightAnchor.constraint(equalToConstant: 22),
 
-            // Tab bar clip view constraints (between the buttons)
-            clipView.leftAnchor.constraint(equalTo: container.leftAnchor, constant: tabBarLeftPadding),
-            clipView.rightAnchor.constraint(equalTo: container.rightAnchor, constant: -tabBarRightPadding),
-            clipView.topAnchor.constraint(equalTo: container.topAnchor, constant: 2),
-            clipView.heightAnchor.constraint(equalTo: container.heightAnchor),
-            accessoryView.leftAnchor.constraint(equalTo: clipView.leftAnchor),
-            accessoryView.rightAnchor.constraint(equalTo: clipView.rightAnchor),
-            accessoryView.topAnchor.constraint(equalTo: clipView.topAnchor),
-            accessoryView.heightAnchor.constraint(equalTo: clipView.heightAnchor),
+            // Custom tab bar constraints (between the buttons)
+            customTabBarHostingView.leftAnchor.constraint(equalTo: container.leftAnchor, constant: tabBarLeftPadding),
+            customTabBarHostingView.rightAnchor.constraint(equalTo: container.rightAnchor, constant: -tabBarRightPadding),
+            customTabBarHostingView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            customTabBarHostingView.heightAnchor.constraint(equalTo: container.heightAnchor),
+
+            // Zero-size the native clip view
+            clipView.widthAnchor.constraint(equalToConstant: 0),
+            clipView.heightAnchor.constraint(equalToConstant: 0),
         ])
 
-        clipView.needsLayout = true
-        accessoryView.needsLayout = true
+        // Refresh tab state
+        refreshTabs()
 
         // Setup an observer for the NSTabBar frame. When system appearance changes or
         // other events occur, the tab bar can resize and clear our constraints. When this
@@ -318,7 +342,27 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             // Wait a tick to let the new tab bars appear and then set them up.
             DispatchQueue.main.async {
                 self.setupTabBar()
+                self.refreshTabs()
             }
+        }
+    }
+
+    /// Reads the current tab group state and updates the view model's tab list.
+    private func refreshTabs() {
+        guard let windows = tabbedWindows as? [TerminalWindow] else {
+            viewModel.tabs = []
+            return
+        }
+
+        viewModel.tabs = windows.enumerated().map { index, window in
+            ViewModel.TabInfo(
+                id: ObjectIdentifier(window),
+                title: window.title,
+                isSelected: window === self,
+                tabColor: window.tabColor,
+                keyEquivalent: window.keyEquivalent,
+                window: window
+            )
         }
     }
 
@@ -327,11 +371,13 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         // triggers view updates.
         DispatchQueue.main.async {
             self.viewModel.hasTabBar = false
+            self.viewModel.tabs = []
         }
 
-        // Remove toggle buttons from the toolbar
+        // Remove toggle buttons and custom tab bar from the toolbar
         fileBrowserButton.removeFromSuperview()
         markdownButton.removeFromSuperview()
+        customTabBarHostingView.removeFromSuperview()
 
         // Clear our observations
         self.tabBarObserver = nil
@@ -422,6 +468,18 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         @Published var isMainWindow: Bool = true
         @Published var fileBrowserVisible: Bool = false
         @Published var markdownVisible: Bool = false
+
+        // Tab state for custom tab bar
+        @Published var tabs: [TabInfo] = []
+
+        struct TabInfo: Identifiable {
+            let id: ObjectIdentifier
+            let title: String
+            let isSelected: Bool
+            let tabColor: TerminalTabColor
+            let keyEquivalent: String?
+            weak var window: NSWindow?
+        }
     }
 }
 
@@ -538,6 +596,97 @@ extension TitlebarTabsTahoeTerminalWindow {
                 return Color.accentColor.opacity(0.2)
             }
             return isHovered ? Color.primary.opacity(0.1) : .clear
+        }
+    }
+
+    // MARK: - Custom Tab Bar
+
+    /// A fully custom tab bar that replaces the native NSTabBar.
+    struct CustomTabBarView: View {
+        @ObservedObject var viewModel: ViewModel
+        let onSelectTab: (NSWindow) -> Void
+        let onCloseTab: (NSWindow) -> Void
+        let onNewTab: () -> Void
+
+        var body: some View {
+            HStack(spacing: 2) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 2) {
+                        ForEach(viewModel.tabs) { tab in
+                            CustomTabItem(
+                                tab: tab,
+                                onSelect: { if let w = tab.window { onSelectTab(w) } },
+                                onClose: { if let w = tab.window { onCloseTab(w) } }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+
+                Button(action: onNewTab) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+                .padding(.trailing, 4)
+            }
+        }
+    }
+
+    /// Individual tab pill with hover/select states, close button, and color indicator.
+    struct CustomTabItem: View {
+        let tab: ViewModel.TabInfo
+        let onSelect: () -> Void
+        let onClose: () -> Void
+
+        @State private var isHovered = false
+
+        var body: some View {
+            Button(action: onSelect) {
+                HStack(spacing: 6) {
+                    if tab.tabColor != .none, let displayColor = tab.tabColor.displayColor {
+                        Circle()
+                            .fill(Color(nsColor: displayColor))
+                            .frame(width: 8, height: 8)
+                    }
+
+                    Text(tab.title)
+                        .font(.system(size: 12))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .foregroundColor(tab.isSelected ? .primary : .secondary)
+
+                    if isHovered {
+                        Button(action: onClose) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .frame(width: 16, height: 16)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(tabBackground)
+                .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium))
+            }
+            .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
+        }
+
+        @ViewBuilder
+        private var tabBackground: some View {
+            if tab.isSelected {
+                Color.primary.opacity(0.12)
+            } else if isHovered {
+                Color.primary.opacity(0.06)
+            } else {
+                Color.clear
+            }
         }
     }
 }
