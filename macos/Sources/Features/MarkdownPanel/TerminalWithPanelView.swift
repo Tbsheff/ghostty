@@ -3,11 +3,18 @@ import Combine
 import Darwin
 import GhosttyKit
 
+/// Which content the right panel displays
+enum RightPanelMode: String, CaseIterable {
+    case markdown = "Markdown"
+    case diff = "Diff"
+}
+
 /// State management for the markdown panel and file browser
 @MainActor
 class MarkdownPanelState: ObservableObject {
     private static let fileBrowserVisibleKey = "ghostty.fileBrowserVisible"
     private static let markdownVisibleKey = "ghostty.markdownVisible"
+    private static let rightPanelModeKey = "ghostty.rightPanelMode"
 
     /// Whether the file browser (left panel) is visible
     @Published var fileBrowserVisible: Bool {
@@ -20,6 +27,13 @@ class MarkdownPanelState: ObservableObject {
     @Published var markdownVisible: Bool {
         didSet {
             UserDefaults.standard.set(markdownVisible, forKey: Self.markdownVisibleKey)
+        }
+    }
+
+    /// Which content the right panel shows (markdown or diff)
+    @Published var rightPanelMode: RightPanelMode {
+        didSet {
+            UserDefaults.standard.set(rightPanelMode.rawValue, forKey: Self.rightPanelModeKey)
         }
     }
 
@@ -49,6 +63,7 @@ class MarkdownPanelState: ObservableObject {
         let defaults = UserDefaults.standard
         self.fileBrowserVisible = defaults.bool(forKey: Self.fileBrowserVisibleKey)
         self.markdownVisible = defaults.bool(forKey: Self.markdownVisibleKey)
+        self.rightPanelMode = RightPanelMode(rawValue: defaults.string(forKey: Self.rightPanelModeKey) ?? "") ?? .markdown
     }
 
     /// Load a markdown file asynchronously
@@ -221,22 +236,40 @@ struct TerminalWithPanelView<Content: View>: View {
                 }
             },
             right: {
-                PanelContainer(identifier: "markdown.panel") {
-                    // Native Swift markdown renderer - no WebKit/JS needed!
-                    NativeMarkdownPanelView(
-                        content: $panelState.content,
-                        filePath: panelState.filePath,
-                        onClose: {
-                            withAnimation(panelTransition) {
-                                panelState.markdownVisible = false
-                            }
-                        },
-                        onRefresh: {
-                            panelState.refresh()
-                        },
-                        onExecuteCode: handleExecuteCode,
-                        config: config
-                    )
+                PanelContainer(identifier: "rightPanel.panel") {
+                    VStack(spacing: 0) {
+                        // Mode switcher header
+                        RightPanelModeSwitcher(mode: $panelState.rightPanelMode)
+
+                        // Content based on mode
+                        switch panelState.rightPanelMode {
+                        case .markdown:
+                            NativeMarkdownPanelView(
+                                content: $panelState.content,
+                                filePath: panelState.filePath,
+                                onClose: {
+                                    withAnimation(panelTransition) {
+                                        panelState.markdownVisible = false
+                                    }
+                                },
+                                onRefresh: {
+                                    panelState.refresh()
+                                },
+                                onExecuteCode: handleExecuteCode,
+                                config: config
+                            )
+
+                        case .diff:
+                            DiffPanelView(
+                                cwd: panelState.browserRootPath,
+                                onClose: {
+                                    withAnimation(panelTransition) {
+                                        panelState.markdownVisible = false
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
             }
         )
@@ -272,6 +305,35 @@ struct TerminalWithPanelView<Content: View>: View {
             object: nil,
             userInfo: ["text": code]
         )
+    }
+}
+
+/// Segmented control to switch between Markdown and Diff in the right panel
+struct RightPanelModeSwitcher: View {
+    @Binding var mode: RightPanelMode
+
+    @Environment(\.adaptiveTheme) private var theme
+
+    var body: some View {
+        HStack {
+            Picker("", selection: $mode) {
+                ForEach(RightPanelMode.allCases, id: \.self) { m in
+                    Text(m.rawValue).tag(m)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 180)
+            .padding(.horizontal, AdaptiveTheme.spacing12)
+            .padding(.vertical, AdaptiveTheme.spacing6)
+
+            Spacer()
+        }
+        .background(theme.surfaceElevatedC)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(theme.borderC.opacity(0.3))
+                .frame(height: 0.5)
+        }
     }
 }
 
