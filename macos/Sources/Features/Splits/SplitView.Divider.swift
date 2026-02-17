@@ -9,6 +9,17 @@ extension SplitView {
         let color: Color
         @Binding var split: CGFloat
 
+        @State private var isHovering: Bool = false
+        @Binding var isDragging: Bool
+
+        private var activeVisibleSize: CGFloat {
+            isDragging ? visibleSize + 4 : (isHovering ? visibleSize + 2 : visibleSize)
+        }
+
+        private var activeColor: Color {
+            isDragging ? Color.accentColor.opacity(0.9) : (isHovering ? Color.accentColor.opacity(0.6) : color)
+        }
+
         private var visibleWidth: CGFloat? {
             switch (direction) {
             case .horizontal:
@@ -58,11 +69,21 @@ extension SplitView {
                     .frame(width: invisibleWidth, height: invisibleHeight)
                     .contentShape(Rectangle()) // Makes it hit testable for pointerStyle
                 Capsule()
-                    .fill(color)
-                    .frame(width: visibleWidth, height: visibleHeight)
+                    .fill(activeColor)
+                    .frame(
+                        width: direction == .horizontal ? activeVisibleSize : nil,
+                        height: direction == .vertical ? activeVisibleSize : nil
+                    )
+                    .shadow(
+                        color: isDragging ? Color.accentColor.opacity(0.3) : .clear,
+                        radius: isDragging ? 4 : 0
+                    )
+                    .animation(.easeOut(duration: 0.15), value: isHovering)
+                    .animation(.easeOut(duration: 0.1), value: isDragging)
             }
             .backport.pointerStyle(pointerStyle)
             .onHover { isHovered in
+                self.isHovering = isHovered
                 // macOS 15+ we use the pointerStyle helper which is much less
                 // error-prone versus manual NSCursor push/pop
                 if #available(macOS 15, *) {

@@ -456,7 +456,7 @@ class QuickTerminalController: BaseTerminalController {
         // it visible.
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = derivedConfig.quickTerminalAnimationDuration
-            context.timingFunction = .init(name: .easeIn)
+            context.timingFunction = .init(controlPoints: 0.22, 1.0, 0.36, 1.0)
             position.setFinal(
                 in: window.animator(),
                 on: screen,
@@ -578,8 +578,8 @@ class QuickTerminalController: BaseTerminalController {
         window.level = .popUpMenu
 
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = derivedConfig.quickTerminalAnimationDuration
-            context.timingFunction = .init(name: .easeIn)
+            context.duration = derivedConfig.quickTerminalAnimationDuration * 0.8
+            context.timingFunction = .init(name: .easeOut)
             position.setInitial(
                 in: window.animator(),
                 on: screen,

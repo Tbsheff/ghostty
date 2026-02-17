@@ -352,12 +352,17 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         }
 
         viewModel.tabs = windows.enumerated().map { index, window in
-            ViewModel.TabInfo(
+            let controller = window.terminalController
+            let hasRunning = controller?.surfaceTree.contains(where: { $0.needsConfirmQuit }) ?? false
+            let hasBell = controller?.focusedSurface?.bell ?? false
+            return ViewModel.TabInfo(
                 id: ObjectIdentifier(window),
                 title: window.title,
                 isSelected: window === self,
                 tabColor: window.tabColor,
                 keyEquivalent: window.keyEquivalent,
+                hasRunningProcess: hasRunning,
+                hasBell: hasBell,
                 window: window
             )
         }
@@ -475,6 +480,8 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             let isSelected: Bool
             let tabColor: TerminalTabColor
             let keyEquivalent: String?
+            let hasRunningProcess: Bool
+            let hasBell: Bool
             weak var window: NSWindow?
         }
     }
@@ -640,6 +647,7 @@ extension TitlebarTabsTahoeTerminalWindow {
         let onClose: () -> Void
 
         @State private var isHovered = false
+        @State private var pulseOpacity: Double = 0.4
 
         var body: some View {
             Button(action: onSelect) {
@@ -648,6 +656,21 @@ extension TitlebarTabsTahoeTerminalWindow {
                         Circle()
                             .fill(Color(nsColor: displayColor))
                             .frame(width: 8, height: 8)
+                    }
+
+                    if !tab.isSelected && tab.hasBell {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 6, height: 6)
+                    } else if !tab.isSelected && tab.hasRunningProcess {
+                        Circle()
+                            .fill(Color.accentColor.opacity(pulseOpacity))
+                            .frame(width: 6, height: 6)
+                            .onAppear {
+                                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                                    pulseOpacity = 1.0
+                                }
+                            }
                     }
 
                     Text(tab.title)
