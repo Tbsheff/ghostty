@@ -629,13 +629,13 @@ extension TitlebarTabsTahoeTerminalWindow {
 
                 Button(action: onNewTab) {
                     Image(systemName: "plus")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary.opacity(0.6))
                 }
                 .buttonStyle(.plain)
-                .frame(width: 24, height: 24)
+                .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
-                .padding(.trailing, 4)
+                .padding(.trailing, AdaptiveTheme.spacing4)
             }
         }
     }
@@ -651,21 +651,21 @@ extension TitlebarTabsTahoeTerminalWindow {
 
         var body: some View {
             Button(action: onSelect) {
-                HStack(spacing: 6) {
+                HStack(spacing: AdaptiveTheme.spacing4) {
                     if tab.tabColor != .none, let displayColor = tab.tabColor.displayColor {
                         Circle()
                             .fill(Color(nsColor: displayColor))
-                            .frame(width: 8, height: 8)
+                            .frame(width: 7, height: 7)
                     }
 
                     if !tab.isSelected && tab.hasBell {
                         Circle()
                             .fill(Color.orange)
-                            .frame(width: 6, height: 6)
+                            .frame(width: 5, height: 5)
                     } else if !tab.isSelected && tab.hasRunningProcess {
                         Circle()
                             .fill(Color.accentColor.opacity(pulseOpacity))
-                            .frame(width: 6, height: 6)
+                            .frame(width: 5, height: 5)
                             .onAppear {
                                 withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                                     pulseOpacity = 1.0
@@ -674,25 +674,18 @@ extension TitlebarTabsTahoeTerminalWindow {
                     }
 
                     Text(tab.title)
-                        .font(.system(size: 12))
+                        .font(.system(size: 11.5, weight: tab.isSelected ? .medium : .regular))
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .foregroundColor(tab.isSelected ? .primary : .secondary)
 
-                    if isHovered {
-                        Button(action: onClose) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .frame(width: 16, height: 16)
-                    }
+                    CloseTabButton(action: onClose)
+                        .opacity(isHovered ? 1 : 0)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                .padding(.horizontal, AdaptiveTheme.spacing8)
+                .padding(.vertical, AdaptiveTheme.spacing4)
                 .background(tabBackground)
-                .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium))
+                .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall))
             }
             .buttonStyle(.plain)
             .onHover { isHovered = $0 }
@@ -701,12 +694,32 @@ extension TitlebarTabsTahoeTerminalWindow {
         @ViewBuilder
         private var tabBackground: some View {
             if tab.isSelected {
-                Color.primary.opacity(0.12)
+                Color.primary.opacity(0.15)
             } else if isHovered {
-                Color.primary.opacity(0.06)
+                Color.primary.opacity(0.07)
             } else {
                 Color.clear
             }
+        }
+    }
+
+    struct CloseTabButton: View {
+        let action: () -> Void
+        @State private var isHovered = false
+
+        var body: some View {
+            Button(action: action) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundColor(isHovered ? .primary : .secondary.opacity(0.6))
+            }
+            .buttonStyle(.plain)
+            .frame(width: 14, height: 14)
+            .background(
+                Circle()
+                    .fill(Color.primary.opacity(isHovered ? 0.12 : 0))
+            )
+            .onHover { isHovered = $0 }
         }
     }
 }
