@@ -329,59 +329,6 @@ struct DiffPanelView: View {
     }
 }
 
-// MARK: - Pill Toggle
-
-/// Custom sliding pill toggle — replaces stock segmented control with animated indicator
-struct PillToggle<T: Hashable & CaseIterable & RawRepresentable>: View
-    where T.RawValue == String, T.AllCases: RandomAccessCollection {
-
-    @Binding var selection: T
-    @Namespace private var pillAnimation
-    @Environment(\.adaptiveTheme) private var theme
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(T.allCases, id: \.self) { option in
-                pillOption(option)
-            }
-        }
-        .padding(2)
-        .background(theme.backgroundC.opacity(0.6))
-        .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium))
-        .overlay(
-            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium)
-                .stroke(theme.borderSubtleC.opacity(0.5), lineWidth: 1)
-        )
-        .fixedSize()
-    }
-
-    @ViewBuilder
-    private func pillOption(_ option: T) -> some View {
-        let isSelected = selection == option
-        Text(option.rawValue)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundColor(isSelected ? theme.textPrimaryC : theme.textMutedC)
-            .padding(.horizontal, AdaptiveTheme.spacing10)
-            .padding(.vertical, 4)
-            .background(
-                Group {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall)
-                            .fill(theme.surfaceHoverC)
-                            .matchedGeometryEffect(id: "pill", in: pillAnimation)
-                    }
-                }
-            )
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.spring(response: AdaptiveTheme.springResponse,
-                                      dampingFraction: AdaptiveTheme.springDamping)) {
-                    selection = option
-                }
-            }
-    }
-}
-
 // MARK: - Diff Panel Header
 
 struct DiffPanelHeader: View {
@@ -391,23 +338,24 @@ struct DiffPanelHeader: View {
     let onClose: () -> Void
 
     @Environment(\.adaptiveTheme) private var theme
+    @Namespace private var scopeUnderline
     @State private var menuHovered = false
 
     var body: some View {
-        HStack(spacing: AdaptiveTheme.spacing8) {
-            // Scope pill toggle
-            PillToggle(selection: $diffScope)
+        HStack(spacing: 0) {
+            // Scope tabs — flat text with underline indicator
+            scopeTabs
 
-            Spacer(minLength: AdaptiveTheme.spacing4)
+            Spacer(minLength: AdaptiveTheme.spacing8)
 
-            // Compact mode toggle (icon-only)
-            compactModeToggle
+            // Mode icons — bare, no container
+            modeIcons
 
-            // Ellipsis menu
+            // Ellipsis — minimal
             ellipsisMenu
         }
-        .padding(.horizontal, AdaptiveTheme.spacing10)
-        .padding(.vertical, AdaptiveTheme.spacing8)
+        .padding(.horizontal, AdaptiveTheme.spacing12)
+        .frame(height: 36)
         .background(theme.surfaceElevatedC)
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -416,20 +364,50 @@ struct DiffPanelHeader: View {
         }
     }
 
-    // MARK: - Mode Toggle
+    // MARK: - Scope Tabs (Linear-style flat text + underline)
 
-    private var compactModeToggle: some View {
-        HStack(spacing: 0) {
+    private var scopeTabs: some View {
+        HStack(spacing: AdaptiveTheme.spacing16) {
+            ForEach(DiffScope.allCases, id: \.self) { scope in
+                scopeTab(scope)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func scopeTab(_ scope: DiffScope) -> some View {
+        let isSelected = diffScope == scope
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                diffScope = scope
+            }
+        }) {
+            VStack(spacing: 0) {
+                Text(scope.rawValue)
+                    .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                    .foregroundColor(isSelected ? theme.textPrimaryC : theme.textMutedC)
+                    .padding(.vertical, 8)
+
+                // Underline indicator
+                Rectangle()
+                    .fill(isSelected ? theme.accentC : Color.clear)
+                    .frame(height: 2)
+                    .matchedGeometryEffect(
+                        id: isSelected ? "scopeUnderline" : "scopeUnderline-\(scope.rawValue)",
+                        in: scopeUnderline
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Mode Icons (bare, no container)
+
+    private var modeIcons: some View {
+        HStack(spacing: 2) {
             modeIcon("list.bullet", mode: .unified, help: "Unified view")
             modeIcon("rectangle.split.2x1", mode: .split, help: "Split view")
         }
-        .padding(2)
-        .background(theme.backgroundC.opacity(0.6))
-        .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium))
-        .overlay(
-            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium)
-                .stroke(theme.borderSubtleC.opacity(0.5), lineWidth: 1)
-        )
     }
 
     @ViewBuilder
@@ -437,13 +415,10 @@ struct DiffPanelHeader: View {
         let isSelected = displayMode == mode
         Button(action: { displayMode = mode }) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(isSelected ? theme.accentC : theme.textMutedC)
-                .frame(width: 28, height: 22)
-                .background(
-                    RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall)
-                        .fill(isSelected ? theme.accentC.opacity(0.12) : Color.clear)
-                )
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(isSelected ? theme.textPrimaryC : theme.textMutedC)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(help)
@@ -459,18 +434,23 @@ struct DiffPanelHeader: View {
 
             Divider()
 
-            // Mode selection (mirrors the icon toggle)
             Section("Display Mode") {
                 Button(action: { displayMode = .unified }) {
-                    Label("Unified", systemImage: "list.bullet")
-                    if displayMode == .unified {
-                        Image(systemName: "checkmark")
+                    HStack {
+                        Label("Unified", systemImage: "list.bullet")
+                        if displayMode == .unified {
+                            Spacer()
+                            Image(systemName: "checkmark")
+                        }
                     }
                 }
                 Button(action: { displayMode = .split }) {
-                    Label("Split", systemImage: "rectangle.split.2x1")
-                    if displayMode == .split {
-                        Image(systemName: "checkmark")
+                    HStack {
+                        Label("Split", systemImage: "rectangle.split.2x1")
+                        if displayMode == .split {
+                            Spacer()
+                            Image(systemName: "checkmark")
+                        }
                     }
                 }
             }
@@ -482,16 +462,14 @@ struct DiffPanelHeader: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(Color(menuHovered ? theme.iconHover : theme.iconDefault))
-                .frame(width: 26, height: 26)
-                .background(menuHovered ? theme.surfaceHoverC : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Options")
         .onHover { menuHovered = $0 }
     }
 }
