@@ -230,6 +230,18 @@ extension Ghostty {
                     }
                 }
 
+                if isSplit {
+                    Rectangle()
+                        .fill(Color.black.opacity(surfaceFocus ? 0 : 0.04))
+                        .allowsHitTesting(false)
+                        .animation(.easeInOut(duration: 0.2), value: surfaceFocus)
+
+                    Rectangle()
+                        .strokeBorder(Color.accentColor.opacity(surfaceFocus ? 0.08 : 0), lineWidth: 1)
+                        .allowsHitTesting(false)
+                        .animation(.easeInOut(duration: 0.2), value: surfaceFocus)
+                }
+
                 #if canImport(AppKit)
                 // Grab handle for dragging the window. We want this to appear at the very
                 // top Z-index os it isn't faded by the unfocused overlay.
