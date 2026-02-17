@@ -66,85 +66,50 @@ struct FileBrowserView: View {
         VStack(spacing: 0) {
             // MARK: - Navigation Section
 
-            // Compact toolbar
-            FileBrowserToolbar(
-                showHiddenFiles: $showHiddenFiles,
-                onGoUp: goUp,
-                onOpenFinder: openInFinder,
-                canGoUp: canGoUp
-            )
+            // Compact header: project name + toolbar actions in one row
+            HStack(spacing: AdaptiveTheme.spacing6) {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.folderIconC)
+
+                Text(projectName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(theme.textPrimaryC)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer()
+
+                ToolbarIconButton(
+                    icon: "arrow.up",
+                    tooltip: "Parent directory",
+                    action: goUp
+                )
+                .disabled(!canGoUp)
+                .opacity(canGoUp ? 1 : 0.4)
+
+                ToolbarIconButton(
+                    icon: showHiddenFiles ? "eye.fill" : "eye.slash.fill",
+                    tooltip: showHiddenFiles ? "Hide hidden files" : "Show hidden files",
+                    action: { showHiddenFiles.toggle() }
+                )
+
+                ToolbarIconButton(
+                    icon: "folder",
+                    tooltip: "Reveal in Finder",
+                    action: openInFinder
+                )
+            }
+            .padding(.horizontal, AdaptiveTheme.spacing12)
+            .padding(.vertical, AdaptiveTheme.spacing8)
             .onChange(of: showHiddenFiles) { _ in loadDirectory() }
 
             SidebarDivider()
 
-            // Breadcrumb navigation
-            BreadcrumbBar(components: breadcrumbComponents, onNavigate: { path in
-                rootPath = path
-            })
-
-            SidebarDivider()
-
-            // MARK: - Quick Access Section (Unified Accordion)
-
-            DisclosureGroup(isExpanded: $showQuickAccess) {
-                VStack(alignment: .leading, spacing: AdaptiveTheme.spacing8) {
-                    // Search field
-                    SidebarSearchField(text: $searchText, placeholder: "Filter files...", label: "Filter")
-
-                    // Recent files (shown only if available)
-                    if !recentFiles.isEmpty {
-                        VStack(alignment: .leading, spacing: AdaptiveTheme.spacing4) {
-                            Text("Recent")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(theme.textMutedC)
-                                .tracking(0.5)
-                                .padding(.horizontal, AdaptiveTheme.spacing10)
-
-                            VStack(alignment: .leading, spacing: AdaptiveTheme.spacing4) {
-                                ForEach(Array(recentFiles.prefix(5).enumerated()), id: \.element) { _, filePath in
-                                    RecentFileButton(
-                                        filePath: filePath,
-                                        onSelect: {
-                                            selectedPath = filePath
-                                            addToRecentFiles(filePath)
-                                            onFileSelected(filePath)
-                                        }
-                                    )
-                                }
-                            }
-                            .padding(.horizontal, AdaptiveTheme.spacing10)
-                        }
-                    }
-                }
-                .padding(.vertical, AdaptiveTheme.spacing8)
-            } label: {
-                HStack(spacing: AdaptiveTheme.spacing6) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(theme.textMutedC)
-
-                    Text("Quick Access")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(theme.textMutedC)
-
-                    Spacer()
-                }
-            }
-            .padding(.horizontal, AdaptiveTheme.spacing8)
-            .padding(.vertical, AdaptiveTheme.spacing6)
-            .animation(.easeInOut(duration: AdaptiveTheme.animationNormal), value: showQuickAccess)
-
-            SidebarDivider()
-
-            // MARK: - Contents Section
-
-            // Project header
-            SidebarProjectHeader(name: projectName)
-
-            Capsule()
-                .fill(theme.borderC)
-                .frame(height: 1)
+            // Search field
+            SidebarSearchField(text: $searchText, placeholder: "Filter files...", label: "Filter")
                 .padding(.horizontal, AdaptiveTheme.spacing8)
+                .padding(.vertical, AdaptiveTheme.spacing6)
 
             // File tree
             if let error = errorMessage {

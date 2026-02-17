@@ -269,26 +269,23 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         let buttonWidth: CGFloat = 32
         let buttonPadding: CGFloat = 8
 
-        // Add file browser button on the left (after window buttons)
-        if fileBrowserButton.superview != container {
-            fileBrowserButton.removeFromSuperview()
-            container.addSubview(fileBrowserButton)
-        }
-        fileBrowserButton.layer?.zPosition = 1000
-
-        // Add markdown button on the right
-        if markdownButton.superview != container {
-            markdownButton.removeFromSuperview()
-            container.addSubview(markdownButton)
-        }
-        markdownButton.layer?.zPosition = 1000
-
-        // Add custom tab bar view (replacing native tab bar)
+        // Add custom tab bar view first (lowest in subview stack for hit testing)
         if customTabBarHostingView.superview != container {
             customTabBarHostingView.removeFromSuperview()
             container.addSubview(customTabBarHostingView)
         }
-        customTabBarHostingView.layer?.zPosition = 999
+
+        // Add toggle buttons AFTER tab bar so they're frontmost for hit testing.
+        // AppKit routes mouse events by subview order (last = frontmost), not zPosition.
+        if fileBrowserButton.superview != container {
+            fileBrowserButton.removeFromSuperview()
+            container.addSubview(fileBrowserButton)
+        }
+
+        if markdownButton.superview != container {
+            markdownButton.removeFromSuperview()
+            container.addSubview(markdownButton)
+        }
 
         // Hide the native clip view (keep it but zero-sized so macOS internals work)
         clipView.translatesAutoresizingMaskIntoConstraints = false
