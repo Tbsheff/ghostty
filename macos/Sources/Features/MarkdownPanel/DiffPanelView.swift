@@ -341,11 +341,14 @@ struct DiffPanelHeader: View {
     @State private var refreshHovered = false
     @State private var closeHovered = false
 
+    @State private var unifiedHovered = false
+    @State private var splitHovered = false
+
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            // Wide layout: single row
+            // Wide layout: single row with text pickers
             wideHeader
-            // Narrow layout: two rows
+            // Narrow layout: single row with icon mode toggle
             narrowHeader
         }
         .background(theme.surfaceElevatedC)
@@ -356,7 +359,7 @@ struct DiffPanelHeader: View {
         }
     }
 
-    // MARK: - Wide Layout (single row)
+    // MARK: - Wide Layout
 
     private var wideHeader: some View {
         HStack(spacing: AdaptiveTheme.spacing8) {
@@ -374,16 +377,17 @@ struct DiffPanelHeader: View {
         .padding(.vertical, AdaptiveTheme.spacing10)
     }
 
-    // MARK: - Narrow Layout (two rows)
+    // MARK: - Narrow Layout (compact icons for mode)
 
     private var narrowHeader: some View {
-        VStack(spacing: AdaptiveTheme.spacing6) {
-            HStack(spacing: AdaptiveTheme.spacing8) {
-                scopePicker
-                Spacer()
-                actionButtons
-            }
-            modePicker
+        HStack(spacing: AdaptiveTheme.spacing6) {
+            scopePicker
+
+            Spacer(minLength: AdaptiveTheme.spacing4)
+
+            compactModeToggle
+
+            actionButtons
         }
         .padding(.horizontal, AdaptiveTheme.spacing8)
         .padding(.vertical, AdaptiveTheme.spacing8)
@@ -398,6 +402,7 @@ struct DiffPanelHeader: View {
             }
         }
         .pickerStyle(.segmented)
+        .fixedSize()
     }
 
     private var modePicker: some View {
@@ -409,8 +414,49 @@ struct DiffPanelHeader: View {
         .pickerStyle(.segmented)
     }
 
+    /// Icon-only mode toggle for narrow widths
+    private var compactModeToggle: some View {
+        HStack(spacing: 2) {
+            modeIconButton(
+                icon: "list.bullet",
+                mode: .unified,
+                isHovered: $unifiedHovered,
+                help: "Unified"
+            )
+            modeIconButton(
+                icon: "rectangle.split.2x1",
+                mode: .split,
+                isHovered: $splitHovered,
+                help: "Split"
+            )
+        }
+        .padding(2)
+        .background(theme.backgroundC.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall))
+    }
+
+    private func modeIconButton(
+        icon: String,
+        mode: DiffDisplayMode,
+        isHovered: Binding<Bool>,
+        help: String
+    ) -> some View {
+        let isSelected = displayMode == mode
+        return Button(action: { displayMode = mode }) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(isSelected ? theme.textPrimaryC : theme.textMutedC)
+                .frame(width: 26, height: 22)
+                .background(isSelected ? theme.surfaceHoverC : (isHovered.wrappedValue ? theme.surfaceHoverC.opacity(0.5) : Color.clear))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .onHover { isHovered.wrappedValue = $0 }
+    }
+
     private var actionButtons: some View {
-        HStack(spacing: AdaptiveTheme.spacing4) {
+        HStack(spacing: 2) {
             Button(action: onRefresh) {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 12, weight: .medium))
