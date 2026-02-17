@@ -382,52 +382,6 @@ struct PillToggle<T: Hashable & CaseIterable & RawRepresentable>: View
     }
 }
 
-// MARK: - Mode Button
-
-/// Icon + text button for display mode selection with accent-tinted active state
-struct DiffModeButton: View {
-    let icon: String
-    let label: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    @Environment(\.adaptiveTheme) private var theme
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .medium))
-                Text(label)
-                    .font(.system(size: 11, weight: .medium))
-            }
-            .foregroundColor(foregroundColor)
-            .padding(.horizontal, AdaptiveTheme.spacing8)
-            .frame(height: 22)
-            .background(
-                RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall)
-                    .fill(backgroundColor)
-            )
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-    }
-
-    private var foregroundColor: Color {
-        if isSelected { return theme.accentC }
-        if isHovered { return theme.textSecondaryC }
-        return theme.textMutedC
-    }
-
-    private var backgroundColor: Color {
-        if isSelected && isHovered { return theme.accentC.opacity(0.18) }
-        if isSelected { return theme.accentC.opacity(0.12) }
-        if isHovered { return theme.surfaceHoverC.opacity(0.5) }
-        return Color.clear
-    }
-}
-
 // MARK: - Diff Panel Header
 
 struct DiffPanelHeader: View {
@@ -437,59 +391,23 @@ struct DiffPanelHeader: View {
     let onClose: () -> Void
 
     @Environment(\.adaptiveTheme) private var theme
-    @State private var refreshHovered = false
-    @State private var closeHovered = false
+    @State private var menuHovered = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Row 1: Scope + Actions
-            HStack(spacing: AdaptiveTheme.spacing8) {
-                PillToggle(selection: $diffScope)
+        HStack(spacing: AdaptiveTheme.spacing8) {
+            // Scope pill toggle
+            PillToggle(selection: $diffScope)
 
-                Spacer()
+            Spacer(minLength: AdaptiveTheme.spacing4)
 
-                HStack(spacing: 2) {
-                    headerIconButton(
-                        icon: "arrow.clockwise",
-                        size: 11,
-                        isHovered: $refreshHovered,
-                        help: "Refresh diff",
-                        action: onRefresh
-                    )
-                    headerIconButton(
-                        icon: "xmark",
-                        size: 10,
-                        weight: .semibold,
-                        isHovered: $closeHovered,
-                        help: "Close",
-                        action: onClose
-                    )
-                }
-            }
-            .padding(.horizontal, AdaptiveTheme.spacing12)
-            .padding(.vertical, AdaptiveTheme.spacing8)
+            // Compact mode toggle (icon-only)
+            compactModeToggle
 
-            // Row 2: Display Mode
-            HStack(spacing: AdaptiveTheme.spacing4) {
-                DiffModeButton(
-                    icon: "list.bullet",
-                    label: "Unified",
-                    isSelected: displayMode == .unified,
-                    action: { displayMode = .unified }
-                )
-                DiffModeButton(
-                    icon: "rectangle.split.2x1",
-                    label: "Split",
-                    isSelected: displayMode == .split,
-                    action: { displayMode = .split }
-                )
-
-                Spacer()
-            }
-            .padding(.horizontal, AdaptiveTheme.spacing12)
-            .padding(.vertical, AdaptiveTheme.spacing6)
-            .background(theme.backgroundC.opacity(0.3))
+            // Ellipsis menu
+            ellipsisMenu
         }
+        .padding(.horizontal, AdaptiveTheme.spacing10)
+        .padding(.vertical, AdaptiveTheme.spacing8)
         .background(theme.surfaceElevatedC)
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -498,26 +416,83 @@ struct DiffPanelHeader: View {
         }
     }
 
+    // MARK: - Mode Toggle
+
+    private var compactModeToggle: some View {
+        HStack(spacing: 0) {
+            modeIcon("list.bullet", mode: .unified, help: "Unified view")
+            modeIcon("rectangle.split.2x1", mode: .split, help: "Split view")
+        }
+        .padding(2)
+        .background(theme.backgroundC.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium))
+        .overlay(
+            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium)
+                .stroke(theme.borderSubtleC.opacity(0.5), lineWidth: 1)
+        )
+    }
+
     @ViewBuilder
-    private func headerIconButton(
-        icon: String,
-        size: CGFloat,
-        weight: Font.Weight = .medium,
-        isHovered: Binding<Bool>,
-        help: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
+    private func modeIcon(_ icon: String, mode: DiffDisplayMode, help: String) -> some View {
+        let isSelected = displayMode == mode
+        Button(action: { displayMode = mode }) {
             Image(systemName: icon)
-                .font(.system(size: size, weight: weight))
-                .foregroundColor(Color(isHovered.wrappedValue ? theme.iconHover : theme.iconDefault))
-                .frame(width: 26, height: 26)
-                .background(isHovered.wrappedValue ? theme.surfaceHoverC : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(isSelected ? theme.accentC : theme.textMutedC)
+                .frame(width: 28, height: 22)
+                .background(
+                    RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall)
+                        .fill(isSelected ? theme.accentC.opacity(0.12) : Color.clear)
+                )
         }
         .buttonStyle(.plain)
         .help(help)
-        .onHover { isHovered.wrappedValue = $0 }
+    }
+
+    // MARK: - Ellipsis Menu
+
+    private var ellipsisMenu: some View {
+        Menu {
+            Button(action: onRefresh) {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+
+            Divider()
+
+            // Mode selection (mirrors the icon toggle)
+            Section("Display Mode") {
+                Button(action: { displayMode = .unified }) {
+                    Label("Unified", systemImage: "list.bullet")
+                    if displayMode == .unified {
+                        Image(systemName: "checkmark")
+                    }
+                }
+                Button(action: { displayMode = .split }) {
+                    Label("Split", systemImage: "rectangle.split.2x1")
+                    if displayMode == .split {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+
+            Divider()
+
+            Button(action: onClose) {
+                Label("Close Diff Panel", systemImage: "xmark")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Color(menuHovered ? theme.iconHover : theme.iconDefault))
+                .frame(width: 26, height: 26)
+                .background(menuHovered ? theme.surfaceHoverC : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Options")
+        .onHover { menuHovered = $0 }
     }
 }
 
