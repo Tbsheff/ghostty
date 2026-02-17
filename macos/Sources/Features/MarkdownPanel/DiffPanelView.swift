@@ -177,40 +177,38 @@ enum DiffParser {
 /// Runs `git diff` in a given directory
 enum GitDiffRunner {
     static func run(in directory: String) async -> String? {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let process = Process()
-                let pipe = Pipe()
-
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-                process.arguments = ["diff", "--no-color"]
-                process.currentDirectoryURL = URL(fileURLWithPath: directory)
-                process.standardOutput = pipe
-                process.standardError = FileHandle.nullDevice
-
-                do {
-                    try process.run()
-                    process.waitUntilExit()
-
-                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                    let output = String(data: data, encoding: .utf8)
-                    continuation.resume(returning: output)
-                } catch {
-                    continuation.resume(returning: nil)
-                }
-            }
-        }
+        await runGitDiff(in: directory, arguments: ["diff", "--no-color"])
     }
 
     /// Run `git diff --staged` for staged changes
     static func runStaged(in directory: String) async -> String? {
+        await runGitDiff(in: directory, arguments: ["diff", "--staged", "--no-color"])
+    }
+
+    /// Run `git diff HEAD` for all uncommitted changes (staged + unstaged)
+    static func runUncommitted(in directory: String) async -> String? {
+        await runGitDiff(in: directory, arguments: ["diff", "HEAD", "--no-color"])
+    }
+
+    /// Run `git diff main...HEAD` for changes vs main branch
+    static func runVsMain(in directory: String) async -> String? {
+        await runGitDiff(in: directory, arguments: ["diff", "main...HEAD", "--no-color"])
+    }
+
+    /// Run `git diff HEAD~1..HEAD` for last commit
+    static func runLastCommit(in directory: String) async -> String? {
+        await runGitDiff(in: directory, arguments: ["diff", "HEAD~1..HEAD", "--no-color"])
+    }
+
+    /// Shared helper to run a git diff command with given arguments
+    private static func runGitDiff(in directory: String, arguments: [String]) async -> String? {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 let process = Process()
                 let pipe = Pipe()
 
                 process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-                process.arguments = ["diff", "--staged", "--no-color"]
+                process.arguments = arguments
                 process.currentDirectoryURL = URL(fileURLWithPath: directory)
                 process.standardOutput = pipe
                 process.standardError = FileHandle.nullDevice
@@ -237,11 +235,26 @@ enum DiffDisplayMode: String, CaseIterable {
     case split = "Split"
 }
 
-// MARK: - Diff Scope
+// MARK: - Diff Compare Mode
 
-enum DiffScope: String, CaseIterable {
-    case unstaged = "Unstaged"
+enum DiffCompareMode: String, CaseIterable {
+    case uncommitted = "Uncommitted"
     case staged = "Staged"
+    case unstaged = "Unstaged"
+    case vsMain = "vs main"
+    case lastCommit = "Last commit"
+
+    var label: String { rawValue }
+
+    var description: String {
+        switch self {
+        case .uncommitted: return "HEAD"
+        case .staged: return "--staged"
+        case .unstaged: return "working tree"
+        case .vsMain: return "main...HEAD"
+        case .lastCommit: return "HEAD~1..HEAD"
+        }
+    }
 }
 
 // MARK: - Diff Panel View
@@ -255,7 +268,7 @@ struct DiffPanelView: View {
     @State private var files: [DiffFile] = []
     @State private var isLoading = false
     @State private var displayMode: DiffDisplayMode = .unified
-    @State private var diffScope: DiffScope = .unstaged
+    @State private var compareMode: DiffCompareMode = .uncommitted
     @State private var errorMessage: String?
 
     var body: some View {
@@ -263,7 +276,7 @@ struct DiffPanelView: View {
             // Header
             DiffPanelHeader(
                 displayMode: $displayMode,
-                diffScope: $diffScope,
+                compareMode: $compareMode,
                 onRefresh: loadDiff,
                 onClose: onClose
             )
@@ -293,7 +306,7 @@ struct DiffPanelView: View {
         .background(theme.backgroundC)
         .onAppear { loadDiff() }
         .onChange(of: cwd) { _ in loadDiff() }
-        .onChange(of: diffScope) { _ in loadDiff() }
+        .onChange(of: compareMode) { _ in loadDiff() }
     }
 
     private func loadDiff() {
@@ -307,11 +320,17 @@ struct DiffPanelView: View {
 
         Task {
             let output: String?
-            switch diffScope {
-            case .unstaged:
-                output = await GitDiffRunner.run(in: cwd)
+            switch compareMode {
+            case .uncommitted:
+                output = await GitDiffRunner.runUncommitted(in: cwd)
             case .staged:
                 output = await GitDiffRunner.runStaged(in: cwd)
+            case .unstaged:
+                output = await GitDiffRunner.run(in: cwd)
+            case .vsMain:
+                output = await GitDiffRunner.runVsMain(in: cwd)
+            case .lastCommit:
+                output = await GitDiffRunner.runLastCommit(in: cwd)
             }
 
             await MainActor.run {
@@ -333,18 +352,17 @@ struct DiffPanelView: View {
 
 struct DiffPanelHeader: View {
     @Binding var displayMode: DiffDisplayMode
-    @Binding var diffScope: DiffScope
+    @Binding var compareMode: DiffCompareMode
     let onRefresh: () -> Void
     let onClose: () -> Void
 
     @Environment(\.adaptiveTheme) private var theme
-    @Namespace private var scopeUnderline
     @State private var menuHovered = false
 
     var body: some View {
         HStack(spacing: 0) {
-            // Scope tabs — flat text with underline indicator
-            scopeTabs
+            // Compare mode dropdown
+            scopeDropdown
 
             Spacer(minLength: AdaptiveTheme.spacing8)
 
@@ -364,41 +382,51 @@ struct DiffPanelHeader: View {
         }
     }
 
-    // MARK: - Scope Tabs (Linear-style flat text + underline)
+    // MARK: - Compare Mode Dropdown
 
-    private var scopeTabs: some View {
-        HStack(spacing: AdaptiveTheme.spacing16) {
-            ForEach(DiffScope.allCases, id: \.self) { scope in
-                scopeTab(scope)
+    private var scopeDropdown: some View {
+        Menu {
+            Section("Working tree") {
+                compareModeOption(.uncommitted)
+                compareModeOption(.staged)
+                compareModeOption(.unstaged)
             }
+            Section("Compare against") {
+                compareModeOption(.vsMain)
+                compareModeOption(.lastCommit)
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(compareMode.label)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(theme.textPrimaryC)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8))
+                    .foregroundColor(theme.textMutedC)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
         }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 
     @ViewBuilder
-    private func scopeTab(_ scope: DiffScope) -> some View {
-        let isSelected = diffScope == scope
-        Button(action: {
-            withAnimation(.easeInOut(duration: 0.15)) {
-                diffScope = scope
-            }
-        }) {
-            VStack(spacing: 0) {
-                Text(scope.rawValue)
-                    .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
-                    .foregroundColor(isSelected ? theme.textPrimaryC : theme.textMutedC)
-                    .padding(.vertical, 8)
-
-                // Underline indicator
-                Rectangle()
-                    .fill(isSelected ? theme.accentC : Color.clear)
-                    .frame(height: 2)
-                    .matchedGeometryEffect(
-                        id: isSelected ? "scopeUnderline" : "scopeUnderline-\(scope.rawValue)",
-                        in: scopeUnderline
-                    )
+    private func compareModeOption(_ mode: DiffCompareMode) -> some View {
+        Button(action: { compareMode = mode }) {
+            HStack {
+                Text(mode.label)
+                Spacer()
+                Text(mode.description)
+                    .foregroundColor(.secondary)
+                    .font(.system(size: 11, design: .monospaced))
+                if compareMode == mode {
+                    Image(systemName: "checkmark")
+                }
             }
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Mode Icons (bare, no container)

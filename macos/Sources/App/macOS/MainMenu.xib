@@ -383,13 +383,13 @@
                                     <userDefinedRuntimeAttribute type="string" keyPath="accessibilityLabel" value="Toggle the file browser sidebar to browse and select files"/>
                                 </userDefinedRuntimeAttributes>
                             </menuItem>
-                            <menuItem title="Toggle Markdown Preview" keyEquivalent="M" id="mkd-pnl-1">
+                            <menuItem title="Toggle Panel" keyEquivalent="M" id="mkd-pnl-1">
                                 <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
                                 <connections>
                                     <action selector="toggleMarkdownPreview:" target="-1" id="mkd-act-1"/>
                                 </connections>
                                 <userDefinedRuntimeAttributes>
-                                    <userDefinedRuntimeAttribute type="string" keyPath="accessibilityLabel" value="Toggle the markdown preview panel"/>
+                                    <userDefinedRuntimeAttribute type="string" keyPath="accessibilityLabel" value="Toggle the right panel"/>
                                 </userDefinedRuntimeAttributes>
                             </menuItem>
                         </items>

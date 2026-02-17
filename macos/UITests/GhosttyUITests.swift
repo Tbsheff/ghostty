@@ -23,7 +23,7 @@ final class GhosttyUITests: XCTestCase {
     private func toggleMarkdown(_ app: XCUIApplication, file: StaticString = #file, line: UInt = #line) {
         let viewMenu = app.menuBars.menuBarItems["View"]
         viewMenu.click()
-        let item = viewMenu.menus.menuItems["Toggle Markdown Preview"]
+        let item = viewMenu.menus.menuItems["Toggle Panel"]
         XCTAssertTrue(item.waitForExistence(timeout: 2), file: file, line: line)
         item.click()
     }

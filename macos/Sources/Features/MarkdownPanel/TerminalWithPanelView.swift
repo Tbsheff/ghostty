@@ -3,18 +3,11 @@ import Combine
 import Darwin
 import GhosttyKit
 
-/// Which content the right panel displays
-enum RightPanelMode: String, CaseIterable {
-    case markdown = "Markdown"
-    case diff = "Diff"
-}
-
 /// State management for the markdown panel and file browser
 @MainActor
 class MarkdownPanelState: ObservableObject {
     private static let fileBrowserVisibleKey = "ghostty.fileBrowserVisible"
     private static let markdownVisibleKey = "ghostty.markdownVisible"
-    private static let rightPanelModeKey = "ghostty.rightPanelMode"
 
     /// Whether the file browser (left panel) is visible
     @Published var fileBrowserVisible: Bool {
@@ -30,12 +23,9 @@ class MarkdownPanelState: ObservableObject {
         }
     }
 
-    /// Which content the right panel shows (markdown or diff)
-    @Published var rightPanelMode: RightPanelMode {
-        didSet {
-            UserDefaults.standard.set(rightPanelMode.rawValue, forKey: Self.rightPanelModeKey)
-        }
-    }
+    /// When non-nil, markdown preview is shown as an overlay on the diff view.
+    /// Transient — not persisted; always returns to diff on app restart.
+    @Published var previewingFile: String?
 
     /// The currently displayed markdown content
     @Published var content: String = ""
@@ -63,12 +53,12 @@ class MarkdownPanelState: ObservableObject {
         let defaults = UserDefaults.standard
         self.fileBrowserVisible = defaults.bool(forKey: Self.fileBrowserVisibleKey)
         self.markdownVisible = defaults.bool(forKey: Self.markdownVisibleKey)
-        self.rightPanelMode = RightPanelMode(rawValue: defaults.string(forKey: Self.rightPanelModeKey) ?? "") ?? .markdown
     }
 
-    /// Load a markdown file asynchronously
+    /// Load a markdown file asynchronously and show as overlay
     func loadFile(at path: String) {
         filePath = path
+        previewingFile = path
         stopWatching()
 
         // Show panel immediately for responsiveness
@@ -108,9 +98,20 @@ class MarkdownPanelState: ObservableObject {
         fileBrowserVisible.toggle()
     }
 
-    /// Toggle just the markdown preview
+    /// Toggle the right panel. Closing also dismisses any active preview.
     func toggleMarkdown() {
+        if markdownVisible {
+            previewingFile = nil
+        }
         markdownVisible.toggle()
+    }
+
+    /// Dismiss the markdown preview overlay, returning to the diff view.
+    /// Does not close the panel itself.
+    func dismissPreview() {
+        previewingFile = nil
+        filePath = nil
+        stopWatching()
     }
 
     /// Start watching a file for changes with debouncing
@@ -237,37 +238,44 @@ struct TerminalWithPanelView<Content: View>: View {
             },
             right: {
                 PanelContainer(identifier: "rightPanel.panel") {
-                    VStack(spacing: 0) {
-                        // Mode switcher header
-                        RightPanelModeSwitcher(mode: $panelState.rightPanelMode)
-
-                        // Content based on mode
-                        switch panelState.rightPanelMode {
-                        case .markdown:
-                            NativeMarkdownPanelView(
-                                content: $panelState.content,
-                                filePath: panelState.filePath,
-                                onClose: {
-                                    withAnimation(panelTransition) {
-                                        panelState.markdownVisible = false
-                                    }
-                                },
-                                onRefresh: {
-                                    panelState.refresh()
-                                },
-                                onExecuteCode: handleExecuteCode,
-                                config: config
-                            )
-
-                        case .diff:
-                            DiffPanelView(
-                                cwd: panelState.browserRootPath,
-                                onClose: {
-                                    withAnimation(panelTransition) {
-                                        panelState.markdownVisible = false
-                                    }
+                    ZStack {
+                        // Base layer: always the diff view
+                        DiffPanelView(
+                            cwd: panelState.browserRootPath,
+                            onClose: {
+                                withAnimation(panelTransition) {
+                                    panelState.markdownVisible = false
                                 }
-                            )
+                            }
+                        )
+                        .opacity(panelState.previewingFile == nil ? 1 : 0)
+
+                        // Overlay: markdown preview when a file is open
+                        if panelState.previewingFile != nil {
+                            VStack(spacing: 0) {
+                                MarkdownBreadcrumb(
+                                    filePath: panelState.filePath,
+                                    onDismiss: {
+                                        withAnimation(panelTransition) {
+                                            panelState.dismissPreview()
+                                        }
+                                    }
+                                )
+
+                                NativeMarkdownPanelView(
+                                    content: $panelState.content,
+                                    filePath: panelState.filePath,
+                                    onClose: {
+                                        withAnimation(panelTransition) {
+                                            panelState.dismissPreview()
+                                        }
+                                    },
+                                    onRefresh: { panelState.refresh() },
+                                    onExecuteCode: handleExecuteCode,
+                                    config: config
+                                )
+                            }
+                            .transition(.opacity)
                         }
                     }
                 }
@@ -308,26 +316,46 @@ struct TerminalWithPanelView<Content: View>: View {
     }
 }
 
-/// Segmented control to switch between Markdown and Diff in the right panel
-struct RightPanelModeSwitcher: View {
-    @Binding var mode: RightPanelMode
+/// Breadcrumb bar shown when a markdown file is previewed as an overlay on the diff view.
+/// Displays filename with a dismiss button to return to the diff.
+struct MarkdownBreadcrumb: View {
+    let filePath: String?
+    let onDismiss: () -> Void
 
     @Environment(\.adaptiveTheme) private var theme
+    @State private var closeHovered = false
+
+    private var fileName: String {
+        guard let path = filePath else { return "Preview" }
+        return URL(fileURLWithPath: path).lastPathComponent
+    }
 
     var body: some View {
-        HStack {
-            Picker("", selection: $mode) {
-                ForEach(RightPanelMode.allCases, id: \.self) { m in
-                    Text(m.rawValue).tag(m)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 180)
-            .padding(.horizontal, AdaptiveTheme.spacing12)
-            .padding(.vertical, AdaptiveTheme.spacing6)
+        HStack(spacing: AdaptiveTheme.spacing8) {
+            Image(systemName: "doc.text")
+                .font(.system(size: 11))
+                .foregroundColor(theme.textMutedC)
+
+            Text(fileName)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(theme.textPrimaryC)
+                .lineLimit(1)
+                .truncationMode(.middle)
 
             Spacer()
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(closeHovered ? theme.textPrimaryC : theme.textMutedC)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { closeHovered = $0 }
         }
+        .padding(.horizontal, AdaptiveTheme.spacing12)
+        .frame(height: 36)
         .background(theme.surfaceElevatedC)
         .overlay(alignment: .bottom) {
             Rectangle()

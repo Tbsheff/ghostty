@@ -447,7 +447,7 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             item.view?.setAccessibilityRole(.button)
             item.isBordered = false
             item.visibilityPriority = .high
-            item.toolTip = "Toggle Markdown Preview (⇧⌘M)"
+            item.toolTip = "Toggle Panel (⇧⌘M)"
             item.minSize = NSSize(width: 28, height: 22)
             item.maxSize = NSSize(width: 28, height: 22)
             return item

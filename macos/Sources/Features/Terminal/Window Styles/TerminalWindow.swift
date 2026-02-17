@@ -729,7 +729,7 @@ extension TerminalWindow {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("markdown.toggle")
-                .help("Toggle Markdown Preview (⇧⌘M)")
+                .help("Toggle Panel (⇧⌘M)")
                 .frame(width: 20, height: 20)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
