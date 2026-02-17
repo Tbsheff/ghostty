@@ -5,7 +5,8 @@ import AppKit
 
 /// Represents a single line in a diff
 struct DiffLine: Identifiable {
-    let id = UUID()
+    /// Stable ID from position + type for SwiftUI diffing
+    var id: String { "\(oldLineNumber ?? 0)-\(newLineNumber ?? 0)-\(type)" }
     let type: LineType
     let content: String
     let oldLineNumber: Int?
@@ -21,14 +22,14 @@ struct DiffLine: Identifiable {
 
 /// Represents a hunk (section) of changes
 struct DiffHunk: Identifiable {
-    let id = UUID()
+    var id: String { header }
     let header: String
     let lines: [DiffLine]
 }
 
 /// Represents a single file's diff
 struct DiffFile: Identifiable {
-    let id = UUID()
+    var id: String { "\(oldPath)-\(newPath)" }
     let oldPath: String
     let newPath: String
     let hunks: [DiffHunk]
@@ -389,7 +390,7 @@ struct DiffPanelHeader: View {
             .onHover { closeHovered = $0 }
         }
         .padding(.horizontal, AdaptiveTheme.spacing12)
-        .padding(.vertical, AdaptiveTheme.spacing8)
+        .padding(.vertical, AdaptiveTheme.spacing10)
         .background(theme.surfaceElevatedC)
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -410,14 +411,9 @@ struct DiffFileSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // File header
+            // File header — Codex layout: [icon] [path] [+N] [-N] ... [chevron]
             Button(action: { withAnimation(.easeOut(duration: AdaptiveTheme.animationFast)) { isExpanded.toggle() } }) {
                 HStack(spacing: AdaptiveTheme.spacing6) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(theme.textMutedC)
-                        .frame(width: 14)
-
                     Image(systemName: "doc.text")
                         .font(.system(size: 12))
                         .foregroundColor(theme.textSecondaryC)
@@ -428,22 +424,26 @@ struct DiffFileSection: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
 
+                    // Inline colored stats
+                    let stats = fileStats
+                    if stats.additions > 0 {
+                        Text("+\(stats.additions)")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(theme.successC)
+                    }
+                    if stats.deletions > 0 {
+                        Text("-\(stats.deletions)")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(theme.dangerC)
+                    }
+
                     Spacer()
 
-                    // Stats
-                    HStack(spacing: AdaptiveTheme.spacing4) {
-                        let stats = fileStats
-                        if stats.additions > 0 {
-                            Text("+\(stats.additions)")
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .foregroundColor(theme.successC)
-                        }
-                        if stats.deletions > 0 {
-                            Text("-\(stats.deletions)")
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .foregroundColor(theme.dangerC)
-                        }
-                    }
+                    // Right-side chevron
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(theme.textMutedC)
+                        .frame(width: 14)
                 }
                 .padding(.horizontal, AdaptiveTheme.spacing12)
                 .padding(.vertical, AdaptiveTheme.spacing8)
@@ -452,11 +452,25 @@ struct DiffFileSection: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                switch displayMode {
-                case .unified:
-                    UnifiedDiffView(file: file)
-                case .split:
-                    SplitDiffView(file: file)
+                // Bottom border when expanded
+                Rectangle()
+                    .fill(theme.borderC.opacity(0.2))
+                    .frame(height: 0.5)
+
+                if file.hunks.isEmpty {
+                    // Binary or empty file
+                    Text("Binary file changed")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(theme.textMutedC)
+                        .padding(AdaptiveTheme.spacing12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    switch displayMode {
+                    case .unified:
+                        UnifiedDiffView(file: file)
+                    case .split:
+                        SplitDiffView(file: file)
+                    }
                 }
             }
         }
@@ -484,89 +498,136 @@ struct UnifiedDiffView: View {
     let file: DiffFile
 
     @Environment(\.adaptiveTheme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var expandedContextSections: Set<String> = []
 
-    private let lineNumberWidth: CGFloat = 40
+    private let edgeBarWidth: CGFloat = 3
+    private let lineNumberWidth: CGFloat = 44
+
+    private var language: String? { languageFromPath(file.newPath) }
+    private var markdownTheme: MarkdownTheme { MarkdownTheme(colorScheme: colorScheme) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(file.hunks) { hunk in
-                // Hunk header
-                Text(hunk.header)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(theme.textMutedC)
-                    .padding(.horizontal, AdaptiveTheme.spacing12)
-                    .padding(.vertical, AdaptiveTheme.spacing4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(theme.accentC.opacity(0.08))
-
-                // Lines
-                ForEach(hunk.lines) { line in
-                    HStack(spacing: 0) {
-                        // Old line number
-                        Text(line.oldLineNumber.map { String($0) } ?? "")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(theme.textMutedC)
-                            .frame(width: lineNumberWidth, alignment: .trailing)
-                            .padding(.trailing, 4)
-
-                        // New line number
-                        Text(line.newLineNumber.map { String($0) } ?? "")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(theme.textMutedC)
-                            .frame(width: lineNumberWidth, alignment: .trailing)
-                            .padding(.trailing, 4)
-
-                        // Indicator
-                        Text(lineIndicator(line.type))
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(lineIndicatorColor(line.type))
-                            .frame(width: 16)
-
-                        // Content
-                        Text(line.content)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(lineTextColor(line.type))
-                            .lineLimit(1)
-
-                        Spacer()
+        let rows = buildDisplayRows(from: file)
+        LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(rows) { row in
+                switch row {
+                case .line(let line):
+                    unifiedLineRow(line)
+                case .collapsedContext(let lines, let stableId):
+                    if expandedContextSections.contains(stableId) {
+                        ForEach(lines) { line in
+                            unifiedLineRow(line)
+                        }
+                    } else {
+                        collapsedContextRow(count: lines.count, stableId: stableId)
                     }
-                    .padding(.vertical, 1)
-                    .background(lineBackground(line.type))
+                case .hunkSeparator(_, let hiddenCount):
+                    hunkSeparatorRow(hiddenCount: hiddenCount)
                 }
             }
         }
     }
 
-    private func lineIndicator(_ type: DiffLine.LineType) -> String {
-        switch type {
-        case .added: return "+"
-        case .removed: return "-"
-        case .context: return " "
-        case .hunkHeader: return "@"
+    // MARK: - Line Row
+
+    @ViewBuilder
+    private func unifiedLineRow(_ line: DiffLine) -> some View {
+        HStack(spacing: 0) {
+            // 3px colored edge bar
+            Rectangle()
+                .fill(edgeColor(line.type))
+                .frame(width: edgeBarWidth)
+
+            // Single line number
+            let num = line.type == .removed ? line.oldLineNumber : line.newLineNumber
+            Text(num.map { String($0) } ?? "")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(theme.textMutedC)
+                .frame(width: lineNumberWidth, alignment: .trailing)
+                .padding(.trailing, 8)
+
+            // Syntax-highlighted content
+            Text(highlightLine(line.content, language: language, theme: markdownTheme))
+                .lineLimit(1)
+
+            Spacer()
         }
+        .padding(.vertical, 3)
+        .background(lineBackground(line.type))
     }
 
-    private func lineIndicatorColor(_ type: DiffLine.LineType) -> Color {
+    // MARK: - Collapsed Context Row
+
+    @ViewBuilder
+    private func collapsedContextRow(count: Int, stableId: String) -> some View {
+        Button(action: { expandedContextSections.insert(stableId) }) {
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: edgeBarWidth)
+
+                Image(systemName: "suit.diamond")
+                    .font(.system(size: 8))
+                    .foregroundColor(theme.textMutedC)
+                    .padding(.leading, AdaptiveTheme.spacing8)
+
+                Text("\(count) unmodified lines")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(theme.textMutedC)
+                    .padding(.leading, AdaptiveTheme.spacing6)
+
+                Spacer()
+            }
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity)
+            .background(theme.surfaceElevatedC.opacity(0.3))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Hunk Separator
+
+    @ViewBuilder
+    private func hunkSeparatorRow(hiddenCount: Int) -> some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: edgeBarWidth)
+
+            Text("···")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(theme.textMutedC)
+                .padding(.leading, AdaptiveTheme.spacing8)
+
+            if hiddenCount > 0 {
+                Text("\(hiddenCount) lines between changes")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(theme.textMutedC)
+                    .padding(.leading, AdaptiveTheme.spacing6)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity)
+        .background(theme.surfaceElevatedC.opacity(0.15))
+    }
+
+    // MARK: - Colors
+
+    private func edgeColor(_ type: DiffLine.LineType) -> Color {
         switch type {
         case .added: return theme.successC
         case .removed: return theme.dangerC
-        default: return theme.textMutedC
-        }
-    }
-
-    private func lineTextColor(_ type: DiffLine.LineType) -> Color {
-        switch type {
-        case .added: return theme.textPrimaryC
-        case .removed: return theme.textPrimaryC
-        case .context: return theme.textSecondaryC
-        case .hunkHeader: return theme.textMutedC
+        default: return Color.clear
         }
     }
 
     private func lineBackground(_ type: DiffLine.LineType) -> Color {
         switch type {
-        case .added: return theme.successC.opacity(0.1)
-        case .removed: return theme.dangerC.opacity(0.1)
+        case .added: return theme.successC.opacity(0.08)
+        case .removed: return theme.dangerC.opacity(0.08)
         default: return Color.clear
         }
     }
@@ -578,117 +639,393 @@ struct SplitDiffView: View {
     let file: DiffFile
 
     @Environment(\.adaptiveTheme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var expandedContextSections: Set<String> = []
+
+    private let edgeBarWidth: CGFloat = 3
+    private let lineNumberWidth: CGFloat = 36
+
+    private var language: String? { languageFromPath(file.newPath) }
+    private var markdownTheme: MarkdownTheme { MarkdownTheme(colorScheme: colorScheme) }
+
+    private enum Side { case old, new }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(file.hunks) { hunk in
-                // Hunk header spanning both sides
-                Text(hunk.header)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(theme.textMutedC)
-                    .padding(.horizontal, AdaptiveTheme.spacing12)
-                    .padding(.vertical, AdaptiveTheme.spacing4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(theme.accentC.opacity(0.08))
-
-                // Paired lines
-                ForEach(Array(pairedLines(hunk.lines).enumerated()), id: \.offset) { _, pair in
-                    HStack(spacing: 0) {
-                        // Left side (old)
-                        splitLineView(pair.old, side: .old)
-
-                        // Divider
-                        Rectangle()
-                            .fill(theme.borderC)
-                            .frame(width: 1)
-
-                        // Right side (new)
-                        splitLineView(pair.new, side: .new)
+        let rows = buildSplitDisplayRows(from: file)
+        LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(rows) { row in
+                switch row {
+                case .pair(let old, let new, _):
+                    splitPairRow(old: old, new: new)
+                case .collapsedContext(let lines, let stableId):
+                    if expandedContextSections.contains(stableId) {
+                        ForEach(lines) { line in
+                            splitPairRow(old: line, new: line)
+                        }
+                    } else {
+                        splitCollapsedRow(count: lines.count, stableId: stableId)
                     }
+                case .hunkSeparator(_, let hiddenCount):
+                    splitHunkSeparator(hiddenCount: hiddenCount)
                 }
             }
         }
     }
 
-    private enum Side { case old, new }
+    // MARK: - Pair Row
 
     @ViewBuilder
-    private func splitLineView(_ line: DiffLine?, side: Side) -> some View {
+    private func splitPairRow(old: DiffLine?, new: DiffLine?) -> some View {
         HStack(spacing: 0) {
+            splitSideView(old, side: .old)
+
+            Rectangle()
+                .fill(theme.borderC.opacity(0.5))
+                .frame(width: 1)
+
+            splitSideView(new, side: .new)
+        }
+    }
+
+    @ViewBuilder
+    private func splitSideView(_ line: DiffLine?, side: Side) -> some View {
+        HStack(spacing: 0) {
+            // Edge bar
+            Rectangle()
+                .fill(line.map { splitEdgeColor($0.type, side: side) } ?? Color.clear)
+                .frame(width: edgeBarWidth)
+
             // Line number
             let num = side == .old ? line?.oldLineNumber : line?.newLineNumber
             Text(num.flatMap { String($0) } ?? "")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(theme.textMutedC)
-                .frame(width: 36, alignment: .trailing)
-                .padding(.trailing, 4)
+                .frame(width: lineNumberWidth, alignment: .trailing)
+                .padding(.trailing, 8)
 
-            // Content
+            // Syntax-highlighted content
             if let line {
-                Text(line.content)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(lineTextColor(line.type))
+                Text(highlightLine(line.content, language: language, theme: markdownTheme))
                     .lineLimit(1)
             }
 
             Spacer()
         }
-        .padding(.vertical, 1)
+        .padding(.vertical, 3)
         .frame(maxWidth: .infinity)
-        .background(line.map { lineBackground($0.type) } ?? Color.clear)
+        .background(line.map { splitBackground($0.type, side: side) } ?? Color.clear)
     }
 
-    private func lineTextColor(_ type: DiffLine.LineType) -> Color {
-        switch type {
-        case .added: return theme.textPrimaryC
-        case .removed: return theme.textPrimaryC
-        case .context: return theme.textSecondaryC
-        case .hunkHeader: return theme.textMutedC
+    // MARK: - Collapsed Context (spans full width)
+
+    @ViewBuilder
+    private func splitCollapsedRow(count: Int, stableId: String) -> some View {
+        Button(action: { expandedContextSections.insert(stableId) }) {
+            HStack(spacing: 0) {
+                Image(systemName: "suit.diamond")
+                    .font(.system(size: 8))
+                    .foregroundColor(theme.textMutedC)
+                    .padding(.leading, AdaptiveTheme.spacing8)
+
+                Text("\(count) unmodified lines")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(theme.textMutedC)
+                    .padding(.leading, AdaptiveTheme.spacing6)
+
+                Spacer()
+            }
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity)
+            .background(theme.surfaceElevatedC.opacity(0.3))
         }
+        .buttonStyle(.plain)
     }
 
-    private func lineBackground(_ type: DiffLine.LineType) -> Color {
+    // MARK: - Hunk Separator
+
+    @ViewBuilder
+    private func splitHunkSeparator(hiddenCount: Int) -> some View {
+        HStack(spacing: 0) {
+            Text("···")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(theme.textMutedC)
+                .padding(.leading, AdaptiveTheme.spacing8)
+
+            if hiddenCount > 0 {
+                Text("\(hiddenCount) lines between changes")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(theme.textMutedC)
+                    .padding(.leading, AdaptiveTheme.spacing6)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity)
+        .background(theme.surfaceElevatedC.opacity(0.15))
+    }
+
+    // MARK: - Colors
+
+    private func splitEdgeColor(_ type: DiffLine.LineType, side: Side) -> Color {
         switch type {
-        case .added: return theme.successC.opacity(0.1)
-        case .removed: return theme.dangerC.opacity(0.1)
+        case .removed where side == .old: return theme.dangerC
+        case .added where side == .new: return theme.successC
         default: return Color.clear
         }
     }
 
-    /// Pair removed and added lines for side-by-side display
-    private func pairedLines(_ lines: [DiffLine]) -> [(old: DiffLine?, new: DiffLine?)] {
-        var result: [(DiffLine?, DiffLine?)] = []
-        var removals: [DiffLine] = []
-        var additions: [DiffLine] = []
-
-        func flushPairs() {
-            let count = max(removals.count, additions.count)
-            for i in 0..<count {
-                let old = i < removals.count ? removals[i] : nil
-                let new = i < additions.count ? additions[i] : nil
-                result.append((old, new))
-            }
-            removals.removeAll()
-            additions.removeAll()
+    private func splitBackground(_ type: DiffLine.LineType, side: Side) -> Color {
+        switch type {
+        case .removed where side == .old: return theme.dangerC.opacity(0.08)
+        case .added where side == .new: return theme.successC.opacity(0.08)
+        default: return Color.clear
         }
-
-        for line in lines {
-            switch line.type {
-            case .removed:
-                removals.append(line)
-            case .added:
-                additions.append(line)
-            case .context:
-                flushPairs()
-                result.append((line, line))
-            case .hunkHeader:
-                flushPairs()
-            }
-        }
-
-        flushPairs()
-        return result
     }
+}
+
+// MARK: - Display Row Types
+
+/// Represents a single row in the flattened diff display
+private enum DiffDisplayRow: Identifiable {
+    case line(DiffLine)
+    case collapsedContext(lines: [DiffLine], stableId: String)
+    case hunkSeparator(stableId: String, hiddenCount: Int)
+
+    var id: String {
+        switch self {
+        case .line(let l): return l.id
+        case .collapsedContext(_, let sid): return "collapse-\(sid)"
+        case .hunkSeparator(let sid, _): return "hunksep-\(sid)"
+        }
+    }
+}
+
+/// Represents a paired row in split diff display
+private enum SplitDisplayRow: Identifiable {
+    case pair(old: DiffLine?, new: DiffLine?, stableId: String)
+    case collapsedContext(lines: [DiffLine], stableId: String)
+    case hunkSeparator(stableId: String, hiddenCount: Int)
+
+    var id: String {
+        switch self {
+        case .pair(_, _, let sid): return "pair-\(sid)"
+        case .collapsedContext(_, let sid): return "collapse-\(sid)"
+        case .hunkSeparator(let sid, _): return "hunksep-\(sid)"
+        }
+    }
+}
+
+// MARK: - Diff Helpers
+
+/// Collapse threshold: runs of context lines > this get collapsed
+private let collapseThreshold = 6
+
+/// Build a flat list of display rows from all hunks, inserting inter-hunk separators
+private func buildDisplayRows(from file: DiffFile) -> [DiffDisplayRow] {
+    var rows: [DiffDisplayRow] = []
+
+    for (hunkIdx, hunk) in file.hunks.enumerated() {
+        // Inter-hunk separator
+        if hunkIdx > 0 {
+            let prevHunk = file.hunks[hunkIdx - 1]
+            let prevLastNew = prevHunk.lines.last?.newLineNumber ?? 0
+            let currFirstNew = hunk.lines.first?.newLineNumber ?? 0
+            let gap = max(0, currFirstNew - prevLastNew - 1)
+            rows.append(.hunkSeparator(
+                stableId: "hunksep-\(hunkIdx)",
+                hiddenCount: gap
+            ))
+        }
+
+        // Process lines within this hunk
+        var contextRun: [DiffLine] = []
+        var contextRunStart = 0
+
+        func flushContext() {
+            guard !contextRun.isEmpty else { return }
+            if contextRun.count <= collapseThreshold {
+                for line in contextRun { rows.append(.line(line)) }
+            } else {
+                // Show first 3, collapse middle, show last 3
+                for line in contextRun.prefix(3) { rows.append(.line(line)) }
+                let middle = Array(contextRun.dropFirst(3).dropLast(3))
+                if !middle.isEmpty {
+                    let sid = "ctx-\(hunkIdx)-\(contextRunStart)"
+                    rows.append(.collapsedContext(lines: middle, stableId: sid))
+                }
+                for line in contextRun.suffix(3) { rows.append(.line(line)) }
+            }
+            contextRun = []
+        }
+
+        for (lineIdx, line) in hunk.lines.enumerated() {
+            if line.type == .context {
+                if contextRun.isEmpty { contextRunStart = lineIdx }
+                contextRun.append(line)
+            } else {
+                flushContext()
+                if line.type != .hunkHeader {
+                    rows.append(.line(line))
+                }
+            }
+        }
+        flushContext()
+    }
+
+    return rows
+}
+
+/// Build split display rows from all hunks
+private func buildSplitDisplayRows(from file: DiffFile) -> [SplitDisplayRow] {
+    var rows: [SplitDisplayRow] = []
+
+    for (hunkIdx, hunk) in file.hunks.enumerated() {
+        // Inter-hunk separator
+        if hunkIdx > 0 {
+            let prevHunk = file.hunks[hunkIdx - 1]
+            let prevLastNew = prevHunk.lines.last?.newLineNumber ?? 0
+            let currFirstNew = hunk.lines.first?.newLineNumber ?? 0
+            let gap = max(0, currFirstNew - prevLastNew - 1)
+            rows.append(.hunkSeparator(
+                stableId: "hunksep-\(hunkIdx)",
+                hiddenCount: gap
+            ))
+        }
+
+        // Pair lines first
+        let paired = pairedLines(hunk.lines)
+
+        // Group context pairs and apply collapsing
+        var contextRun: [(old: DiffLine?, new: DiffLine?)] = []
+        var contextRunStart = 0
+
+        func flushContext() {
+            guard !contextRun.isEmpty else { return }
+            // Extract DiffLines for the collapsed section
+            let contextLines = contextRun.compactMap { $0.old ?? $0.new }
+            if contextRun.count <= collapseThreshold {
+                for (i, pair) in contextRun.enumerated() {
+                    let sid = "\(hunkIdx)-ctx-\(contextRunStart + i)"
+                    rows.append(.pair(old: pair.old, new: pair.new, stableId: sid))
+                }
+            } else {
+                // Show first 3
+                for (i, pair) in contextRun.prefix(3).enumerated() {
+                    let sid = "\(hunkIdx)-ctx-\(contextRunStart + i)"
+                    rows.append(.pair(old: pair.old, new: pair.new, stableId: sid))
+                }
+                // Collapse middle
+                let middleLines = Array(contextLines.dropFirst(3).dropLast(3))
+                if !middleLines.isEmpty {
+                    let sid = "ctx-\(hunkIdx)-\(contextRunStart)"
+                    rows.append(.collapsedContext(lines: middleLines, stableId: sid))
+                }
+                // Show last 3
+                let lastThree = contextRun.suffix(3)
+                for (i, pair) in lastThree.enumerated() {
+                    let sid = "\(hunkIdx)-ctx-\(contextRunStart + contextRun.count - 3 + i)"
+                    rows.append(.pair(old: pair.old, new: pair.new, stableId: sid))
+                }
+            }
+            contextRun = []
+        }
+
+        for (pairIdx, pair) in paired.enumerated() {
+            let isContext = (pair.old?.type == .context || pair.new?.type == .context)
+                && pair.old?.type != .added && pair.old?.type != .removed
+                && pair.new?.type != .added && pair.new?.type != .removed
+            if isContext {
+                if contextRun.isEmpty { contextRunStart = pairIdx }
+                contextRun.append(pair)
+            } else {
+                flushContext()
+                let sid = "\(hunkIdx)-\(pairIdx)"
+                rows.append(.pair(old: pair.old, new: pair.new, stableId: sid))
+            }
+        }
+        flushContext()
+    }
+
+    return rows
+}
+
+/// Pair removed and added lines for side-by-side display (shared helper)
+private func pairedLines(_ lines: [DiffLine]) -> [(old: DiffLine?, new: DiffLine?)] {
+    var result: [(DiffLine?, DiffLine?)] = []
+    var removals: [DiffLine] = []
+    var additions: [DiffLine] = []
+
+    func flushPairs() {
+        let count = max(removals.count, additions.count)
+        for i in 0..<count {
+            let old = i < removals.count ? removals[i] : nil
+            let new = i < additions.count ? additions[i] : nil
+            result.append((old, new))
+        }
+        removals.removeAll()
+        additions.removeAll()
+    }
+
+    for line in lines {
+        switch line.type {
+        case .removed: removals.append(line)
+        case .added: additions.append(line)
+        case .context:
+            flushPairs()
+            result.append((line, line))
+        case .hunkHeader:
+            flushPairs()
+        }
+    }
+    flushPairs()
+    return result
+}
+
+/// Map file extension to language string for SyntaxHighlighter
+private func languageFromPath(_ path: String) -> String? {
+    let ext = URL(fileURLWithPath: path).pathExtension.lowercased()
+    switch ext {
+    case "swift": return "swift"
+    case "py": return "python"
+    case "js", "jsx", "mjs", "cjs": return "javascript"
+    case "ts", "tsx", "mts": return "typescript"
+    case "go": return "go"
+    case "rs": return "rust"
+    case "zig": return "zig"
+    case "c", "h": return "c"
+    case "cpp", "cxx", "cc", "hpp", "hxx": return "cpp"
+    case "rb": return "ruby"
+    case "java": return "java"
+    case "kt", "kts": return "kotlin"
+    case "sql": return "sql"
+    case "sh", "bash", "zsh": return "shell"
+    case "json": return "json"
+    case "yaml", "yml": return "yaml"
+    case "toml": return "toml"
+    case "css": return "css"
+    case "html", "htm": return "html"
+    default: return nil
+    }
+}
+
+/// Syntax-highlight a single line, overriding font size to 12pt for diff typography
+private func highlightLine(_ content: String, language: String?, theme: MarkdownTheme) -> AttributedString {
+    guard let language, !content.trimmingCharacters(in: .whitespaces).isEmpty else {
+        var attr = AttributedString(content)
+        attr.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        return attr
+    }
+    var result = SyntaxHighlighter.highlight(content, language: language, theme: theme)
+    // Override font size from codeFontSize to 12pt while keeping syntax colors
+    var modified = AttributedString()
+    for run in result.runs {
+        var slice = result[run.range]
+        let isBold = run.font?.fontDescriptor.symbolicTraits.contains(.bold) == true
+        slice.font = .monospacedSystemFont(ofSize: 12, weight: isBold ? .bold : .regular)
+        modified.append(AttributedString(slice))
+    }
+    return modified
 }
 
 // MARK: - Empty State
