@@ -194,9 +194,15 @@ extension Ghostty {
 #if canImport(AppKit)
                             Ghostty.moveFocus(to: surfaceView)
 #endif
-                            surfaceView.searchState = nil
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                surfaceView.searchState = nil
+                            }
                         }
                     )
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.95, anchor: .topTrailing).combined(with: .opacity),
+                        removal: .opacity
+                    ))
                 }
 
                 // Show bell border if enabled

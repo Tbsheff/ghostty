@@ -1905,7 +1905,9 @@ extension Ghostty {
                             searchState.needle = needle
                         }
                     } else {
-                        surfaceView.searchState = Ghostty.SurfaceView.SearchState(from: startSearch)
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                            surfaceView.searchState = Ghostty.SurfaceView.SearchState(from: startSearch)
+                        }
                     }
                                         
                     NotificationCenter.default.post(name: .ghosttySearchFocus, object: surfaceView)
@@ -1929,7 +1931,9 @@ extension Ghostty {
                 guard let surfaceView = self.surfaceView(from: surface) else { return }
 
                 DispatchQueue.main.async {
-                    surfaceView.searchState = nil
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        surfaceView.searchState = nil
+                    }
                 }
 
             default:
