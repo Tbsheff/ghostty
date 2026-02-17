@@ -39,8 +39,13 @@ struct TerminalCommandPaletteView: View {
                     }
                     .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
                 }
+                .transition(.asymmetric(
+                    insertion: .scale(scale: 0.95).combined(with: .opacity),
+                    removal: .scale(scale: 0.98).combined(with: .opacity)
+                ))
             }
         }
+        .animation(.spring(response: 0.25, dampingFraction: 0.85), value: isPresented)
         .onChange(of: isPresented) { newValue in
             // When the command palette disappears we need to send focus back to the
             // surface view we were overlaid on top of. There's probably a better way
