@@ -342,28 +342,75 @@ struct DiffPanelHeader: View {
     @State private var closeHovered = false
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            // Wide layout: single row
+            wideHeader
+            // Narrow layout: two rows
+            narrowHeader
+        }
+        .background(theme.surfaceElevatedC)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(theme.borderC.opacity(0.3))
+                .frame(height: 0.5)
+        }
+    }
+
+    // MARK: - Wide Layout (single row)
+
+    private var wideHeader: some View {
         HStack(spacing: AdaptiveTheme.spacing8) {
-            // Diff scope picker
-            Picker("", selection: $diffScope) {
-                ForEach(DiffScope.allCases, id: \.self) { scope in
-                    Text(scope.rawValue).tag(scope)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 160)
+            scopePicker
+                .frame(maxWidth: 160)
 
             Spacer()
 
-            // Display mode toggle
-            Picker("", selection: $displayMode) {
-                ForEach(DiffDisplayMode.allCases, id: \.self) { mode in
-                    Text(mode.rawValue).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 130)
+            modePicker
+                .frame(maxWidth: 130)
 
-            // Refresh
+            actionButtons
+        }
+        .padding(.horizontal, AdaptiveTheme.spacing12)
+        .padding(.vertical, AdaptiveTheme.spacing10)
+    }
+
+    // MARK: - Narrow Layout (two rows)
+
+    private var narrowHeader: some View {
+        VStack(spacing: AdaptiveTheme.spacing6) {
+            HStack(spacing: AdaptiveTheme.spacing8) {
+                scopePicker
+                Spacer()
+                actionButtons
+            }
+            modePicker
+        }
+        .padding(.horizontal, AdaptiveTheme.spacing8)
+        .padding(.vertical, AdaptiveTheme.spacing8)
+    }
+
+    // MARK: - Shared Components
+
+    private var scopePicker: some View {
+        Picker("", selection: $diffScope) {
+            ForEach(DiffScope.allCases, id: \.self) { scope in
+                Text(scope.rawValue).tag(scope)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
+    private var modePicker: some View {
+        Picker("", selection: $displayMode) {
+            ForEach(DiffDisplayMode.allCases, id: \.self) { mode in
+                Text(mode.rawValue).tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
+    private var actionButtons: some View {
+        HStack(spacing: AdaptiveTheme.spacing4) {
             Button(action: onRefresh) {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 12, weight: .medium))
@@ -376,7 +423,6 @@ struct DiffPanelHeader: View {
             .help("Refresh diff")
             .onHover { refreshHovered = $0 }
 
-            // Close
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 11, weight: .semibold))
@@ -388,14 +434,6 @@ struct DiffPanelHeader: View {
             .buttonStyle(.plain)
             .help("Close")
             .onHover { closeHovered = $0 }
-        }
-        .padding(.horizontal, AdaptiveTheme.spacing12)
-        .padding(.vertical, AdaptiveTheme.spacing10)
-        .background(theme.surfaceElevatedC)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(theme.borderC.opacity(0.3))
-                .frame(height: 0.5)
         }
     }
 }
