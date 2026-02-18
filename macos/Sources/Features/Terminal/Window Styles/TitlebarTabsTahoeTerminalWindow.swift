@@ -56,6 +56,21 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             },
             onNewTab: { [weak self] in
                 self?.terminalController?.newTab(self)
+            },
+            onReorderTab: { [weak self] sourceWindow, targetIndex in
+                guard let self else { return }
+                guard let tabGroup = self.tabGroup else { return }
+                let windows = tabGroup.windows
+                guard let sourceIndex = windows.firstIndex(of: sourceWindow) else { return }
+                guard targetIndex != sourceIndex else { return }
+                guard targetIndex >= 0 && targetIndex < windows.count else { return }
+
+                let targetWindow = windows[targetIndex]
+                tabGroup.removeWindow(sourceWindow)
+                targetWindow.addTabbedWindow(sourceWindow, ordered: targetIndex > sourceIndex ? .above : .below)
+                DispatchQueue.main.async {
+                    sourceWindow.makeKey()
+                }
             }
         ))
         view.translatesAutoresizingMaskIntoConstraints = false
@@ -129,12 +144,32 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         self.viewModel.markdownVisible = markdownVisible
     }
 
-    /// On our Tahoe titlebar tabs, we need to fix up right click events because they don't work
-    /// naturally due to whatever mess we made.
+    /// On our Tahoe titlebar tabs, we need to fix up right click, double-click, and drag events
+    /// because they don't work naturally due to our custom tab bar replacing the native one.
     override func sendEvent(_ event: NSEvent) {
         guard viewModel.hasTabBar else {
             super.sendEvent(event)
             return
+        }
+
+        // Handle left clicks in the titlebar for double-click-to-zoom and
+        // single-click-to-drag on empty tab bar space.
+        if event.type == .leftMouseDown, let titlebarView, titlebarView.isMousePoint(
+            titlebarView.convert(event.locationInWindow, from: nil),
+            in: titlebarView.bounds
+        ) {
+            if event.clickCount >= 2 {
+                // Double-click triggers the system's "Double-click a window's
+                // title bar to" preference (zoom/minimize).
+                performZoom(nil)
+                return
+            }
+
+            if isEmptyTitlebarSpace(at: event.locationInWindow) {
+                // Single click on empty space starts a window drag.
+                performDrag(with: event)
+                return
+            }
         }
 
         let isRightClick =
@@ -158,6 +193,38 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         }
         
         tabBarView.rightMouseDown(with: event)
+    }
+
+    /// Returns true if the given window-coordinate point is on empty titlebar space
+    /// (not on a tab, toggle button, or other interactive element).
+    private func isEmptyTitlebarSpace(at windowPoint: NSPoint) -> Bool {
+        // Check standard window buttons (traffic lights: close, minimize, zoom)
+        for buttonType: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
+            guard let button = standardWindowButton(buttonType) else { continue }
+            let locInButton = button.convert(windowPoint, from: nil)
+            if button.bounds.contains(locInButton) { return false }
+        }
+
+        // Check toggle buttons
+        let locInFile = fileBrowserButton.convert(windowPoint, from: nil)
+        if fileBrowserButton.bounds.contains(locInFile) { return false }
+
+        let locInMd = markdownButton.convert(windowPoint, from: nil)
+        if markdownButton.bounds.contains(locInMd) { return false }
+
+        // Check the custom tab bar hosting view. hitTest returns:
+        // - A child view (button, etc.) when hitting an interactive SwiftUI element
+        // - The hosting view itself when hitting empty space within it
+        // - nil when the point is outside the hosting view entirely
+        guard let superview = customTabBarHostingView.superview else { return true }
+        let pointInSuperview = superview.convert(windowPoint, from: nil)
+
+        if let hitView = customTabBarHostingView.hitTest(pointInSuperview) {
+            return hitView === customTabBarHostingView
+        }
+
+        // Point is in titlebar but outside the hosting view (e.g. near traffic lights)
+        return true
     }
 
     // This is called by macOS for native tabbing in order to add the tab bar. We hook into
@@ -611,6 +678,10 @@ extension TitlebarTabsTahoeTerminalWindow {
         let onSelectTab: (NSWindow) -> Void
         let onCloseTab: (NSWindow) -> Void
         let onNewTab: () -> Void
+        let onReorderTab: (_ sourceWindow: NSWindow, _ targetIndex: Int) -> Void
+
+        @State private var draggedTabId: ObjectIdentifier?
+        @State private var dragOffset: CGFloat = 0
 
         var body: some View {
             HStack(spacing: 2) {
@@ -619,13 +690,48 @@ extension TitlebarTabsTahoeTerminalWindow {
                         ForEach(viewModel.tabs) { tab in
                             CustomTabItem(
                                 tab: tab,
+                                isDragging: draggedTabId == tab.id,
                                 onSelect: { if let w = tab.window { onSelectTab(w) } },
-                                onClose: { if let w = tab.window { onCloseTab(w) } }
+                                onClose: { if let w = tab.window { onCloseTab(w) } },
+                                onDragChanged: { value in
+                                    draggedTabId = tab.id
+                                    dragOffset = value.translation.width
+                                },
+                                onDragEnded: { value in
+                                    let currentIndex = viewModel.tabs.firstIndex(where: { $0.id == tab.id }) ?? 0
+                                    let averageTabWidth: CGFloat = 120
+                                    let indexDelta = Int(round(value.translation.width / averageTabWidth))
+                                    let targetIndex = max(0, min(viewModel.tabs.count - 1, currentIndex + indexDelta))
+
+                                    if targetIndex != currentIndex, let window = tab.window {
+                                        onReorderTab(window, targetIndex)
+                                    }
+
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        draggedTabId = nil
+                                        dragOffset = 0
+                                    }
+                                }
                             )
+                            .zIndex(draggedTabId == tab.id ? 1 : 0)
+                            .offset(x: draggedTabId == tab.id ? dragOffset : 0)
                         }
                     }
                     .padding(.horizontal, 4)
                 }
+                .mask(
+                    HStack(spacing: 0) {
+                        LinearGradient(
+                            stops: [.init(color: .clear, location: 0), .init(color: .black, location: 1)],
+                            startPoint: .leading, endPoint: .trailing
+                        ).frame(width: 8)
+                        Color.black
+                        LinearGradient(
+                            stops: [.init(color: .black, location: 0), .init(color: .clear, location: 1)],
+                            startPoint: .leading, endPoint: .trailing
+                        ).frame(width: 8)
+                    }
+                )
 
                 Button(action: onNewTab) {
                     Image(systemName: "plus")
@@ -640,55 +746,84 @@ extension TitlebarTabsTahoeTerminalWindow {
         }
     }
 
-    /// Individual tab pill with hover/select states, close button, and color indicator.
+    /// Individual tab pill with hover/select states, close button, key equivalents, and color indicator.
     struct CustomTabItem: View {
         let tab: ViewModel.TabInfo
+        let isDragging: Bool
         let onSelect: () -> Void
         let onClose: () -> Void
+        let onDragChanged: ((DragGesture.Value) -> Void)?
+        let onDragEnded: ((DragGesture.Value) -> Void)?
 
         @State private var isHovered = false
         @State private var pulseOpacity: Double = 0.4
 
+        init(tab: ViewModel.TabInfo, isDragging: Bool = false, onSelect: @escaping () -> Void, onClose: @escaping () -> Void, onDragChanged: ((DragGesture.Value) -> Void)? = nil, onDragEnded: ((DragGesture.Value) -> Void)? = nil) {
+            self.tab = tab
+            self.isDragging = isDragging
+            self.onSelect = onSelect
+            self.onClose = onClose
+            self.onDragChanged = onDragChanged
+            self.onDragEnded = onDragEnded
+        }
+
         var body: some View {
-            Button(action: onSelect) {
-                HStack(spacing: AdaptiveTheme.spacing4) {
-                    if tab.tabColor != .none, let displayColor = tab.tabColor.displayColor {
-                        Circle()
-                            .fill(Color(nsColor: displayColor))
-                            .frame(width: 7, height: 7)
-                    }
+            HStack(spacing: AdaptiveTheme.spacing4) {
+                if tab.tabColor != .none, let displayColor = tab.tabColor.displayColor {
+                    Circle()
+                        .fill(Color(nsColor: displayColor))
+                        .frame(width: 7, height: 7)
+                }
 
-                    if !tab.isSelected && tab.hasBell {
-                        Circle()
-                            .fill(Color.orange)
-                            .frame(width: 5, height: 5)
-                    } else if !tab.isSelected && tab.hasRunningProcess {
-                        Circle()
-                            .fill(Color.accentColor.opacity(pulseOpacity))
-                            .frame(width: 5, height: 5)
-                            .onAppear {
-                                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                                    pulseOpacity = 1.0
-                                }
+                if !tab.isSelected && tab.hasBell {
+                    Circle()
+                        .fill(Color.orange)
+                        .frame(width: 5, height: 5)
+                } else if !tab.isSelected && tab.hasRunningProcess {
+                    Circle()
+                        .fill(Color.accentColor.opacity(pulseOpacity))
+                        .frame(width: 5, height: 5)
+                        .onAppear {
+                            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                                pulseOpacity = 1.0
                             }
-                    }
+                        }
+                }
 
-                    Text(tab.title)
-                        .font(.system(size: 11.5, weight: tab.isSelected ? .medium : .regular))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .foregroundColor(tab.isSelected ? .primary : .secondary)
+                Text(tab.title)
+                    .font(.system(size: 11.5, weight: tab.isSelected ? .medium : .regular))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundColor(tab.isSelected ? .primary : .secondary)
 
+                // Key equivalent / close button share the same space
+                ZStack {
                     CloseTabButton(action: onClose)
                         .opacity(isHovered ? 1 : 0)
+
+                    if let key = tab.keyEquivalent, !key.isEmpty {
+                        Text(key)
+                            .font(.system(size: 9, weight: .medium, design: .rounded))
+                            .foregroundColor(.secondary.opacity(0.4))
+                            .opacity(!isHovered ? 1 : 0)
+                    }
                 }
-                .padding(.horizontal, AdaptiveTheme.spacing8)
-                .padding(.vertical, AdaptiveTheme.spacing4)
-                .background(tabBackground)
-                .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall))
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, AdaptiveTheme.spacing8)
+            .padding(.vertical, AdaptiveTheme.spacing4)
+            .background(tabBackground)
+            .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall))
+            .contentShape(Rectangle())
+            .onTapGesture { onSelect() }
+            .gesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { value in onDragChanged?(value) }
+                    .onEnded { value in onDragEnded?(value) }
+            )
             .onHover { isHovered = $0 }
+            .scaleEffect(isDragging ? 1.05 : 1)
+            .shadow(color: .black.opacity(isDragging ? 0.15 : 0), radius: isDragging ? 4 : 0)
+            .animation(.easeOut(duration: 0.15), value: isDragging)
         }
 
         @ViewBuilder
