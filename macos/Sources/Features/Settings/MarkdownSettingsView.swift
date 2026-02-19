@@ -2,15 +2,15 @@ import SwiftUI
 import GhosttyKit
 
 struct MarkdownSettingsView: View {
-    // Use @AppStorage for persistence (writes to UserDefaults)
-    // These will need to sync with the config file
     @AppStorage("markdown.theme") private var theme = "terminal"
     @AppStorage("markdown.fontSize") private var fontSize: Double = 15
     @AppStorage("markdown.codeFontSize") private var codeFontSize: Double = 13
     @AppStorage("markdown.lineHeight") private var lineHeight: Double = 1.4
     @AppStorage("markdown.codeTheme") private var codeTheme = "auto"
     @State private var showPreview: Bool = true
-    
+
+    @Environment(\.adaptiveTheme) private var adaptiveTheme
+
     // Dynamic preview colors based on theme
     private var themeBackground: Color {
         switch theme {
@@ -24,7 +24,7 @@ struct MarkdownSettingsView: View {
             return Color(red: 0.15, green: 0.15, blue: 0.15)
         }
     }
-    
+
     private var themeForeground: Color {
         switch theme {
         case "github":
@@ -35,7 +35,7 @@ struct MarkdownSettingsView: View {
             return Color(red: 0.9, green: 0.9, blue: 0.9)
         }
     }
-    
+
     private var codeThemeColor: Color {
         switch codeTheme {
         case "monokai":
@@ -56,72 +56,89 @@ struct MarkdownSettingsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 16) {
-            // Settings panel
-            VStack(alignment: .leading, spacing: 0) {
-                Form {
-                    Section("Theme") {
-                        Picker("Panel Theme", selection: $theme) {
-                            Text("Terminal").tag("terminal")
-                            Text("Ghostty").tag("ghostty")
-                            Text("GitHub").tag("github")
-                            Text("Minimal").tag("minimal")
-                        }
+        HStack(spacing: 0) {
+            // Settings panel — themed controls
+            SettingsFormContainer {
+                ThemedSection(header: "Theme") {
+                    ThemedPicker(
+                        label: "Panel Theme",
+                        selection: $theme,
+                        options: [
+                            ("Terminal", "terminal"),
+                            ("Ghostty", "ghostty"),
+                            ("GitHub", "github"),
+                            ("Minimal", "minimal"),
+                        ]
+                    )
 
-                        Picker("Code Syntax Theme", selection: $codeTheme) {
-                            Text("Auto").tag("auto")
-                            Text("Monokai").tag("monokai")
-                            Text("Dracula").tag("dracula")
-                            Text("Nord").tag("nord")
-                            Text("GitHub").tag("github")
-                            Text("One Dark").tag("one-dark")
-                            Text("Terminal").tag("terminal")
-                        }
-                    }
-
-                    Section("Typography") {
-                        HStack {
-                            Text("Font Size: \(Int(fontSize))")
-                            Slider(value: $fontSize, in: 10...24, step: 1)
-                        }
-
-                        HStack {
-                            Text("Code Font Size: \(Int(codeFontSize))")
-                            Slider(value: $codeFontSize, in: 10...24, step: 1)
-                        }
-
-                        HStack {
-                            Text("Line Height: \(lineHeight, specifier: "%.1f")")
-                            Slider(value: $lineHeight, in: 1.0...2.0, step: 0.1)
-                        }
-                    }
-
-                    Section {
-                        Text("Changes are saved automatically to your Ghostty config file.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    ThemedPicker(
+                        label: "Code Syntax Theme",
+                        selection: $codeTheme,
+                        options: [
+                            ("Auto", "auto"),
+                            ("Monokai", "monokai"),
+                            ("Dracula", "dracula"),
+                            ("Nord", "nord"),
+                            ("GitHub", "github"),
+                            ("One Dark", "one-dark"),
+                            ("Terminal", "terminal"),
+                        ]
+                    )
                 }
-                .padding()
+
+                ThemedSection(header: "Typography") {
+                    ThemedSlider(
+                        label: "Font Size",
+                        value: $fontSize,
+                        range: 10...24,
+                        step: 1,
+                        format: "%.0f",
+                        suffix: "pt"
+                    )
+
+                    ThemedSlider(
+                        label: "Code Font Size",
+                        value: $codeFontSize,
+                        range: 10...24,
+                        step: 1,
+                        format: "%.0f",
+                        suffix: "pt"
+                    )
+
+                    ThemedSlider(
+                        label: "Line Height",
+                        value: $lineHeight,
+                        range: 1.0...2.0,
+                        step: 0.1,
+                        format: "%.1f"
+                    )
+                }
+
+                AutoSaveFooter()
             }
             .frame(maxWidth: .infinity)
-            
-            // Live preview panel
+
+            // Live preview panel (kept as-is — already custom styled)
             if showPreview {
+                Rectangle()
+                    .fill(adaptiveTheme.borderSubtleC)
+                    .frame(width: 1)
+
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("Live Preview")
-                            .font(.headline)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(adaptiveTheme.textPrimaryC)
                         Spacer()
                         Button(action: { showPreview = false }) {
                             Image(systemName: "xmark")
                                 .font(.system(size: 12))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(adaptiveTheme.textMutedC)
                         }
                         .buttonStyle(.plain)
                     }
                     .padding(.bottom, 4)
-                    
+
                     // Quick preset buttons
                     HStack(spacing: 6) {
                         ForEach(["terminal", "ghostty", "github", "minimal"], id: \.self) { presetTheme in
@@ -130,8 +147,10 @@ struct MarkdownSettingsView: View {
                                     .font(.system(size: 10, weight: .semibold))
                                     .foregroundColor(.white)
                                     .frame(width: 24, height: 24)
-                                    .background(theme == presetTheme ? Color.blue : Color.gray.opacity(0.5))
-                                    .cornerRadius(4)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall, style: .continuous)
+                                            .fill(theme == presetTheme ? adaptiveTheme.accentC : adaptiveTheme.surfaceHoverC)
+                                    )
                             }
                             .buttonStyle(.plain)
                             .help("Switch to \(presetTheme) theme")
@@ -139,17 +158,14 @@ struct MarkdownSettingsView: View {
                         Spacer()
                     }
                     .padding(.bottom, 4)
-                    
+
                     ScrollView {
                         VStack(alignment: .leading, spacing: 12) {
-                            // Live preview with actual theme colors
                             VStack(alignment: .leading, spacing: 8) {
-                                // Heading
                                 Text("# Markdown Heading")
                                     .font(.system(size: CGFloat(fontSize), weight: .bold, design: .default))
                                     .foregroundColor(themeForeground)
-                                
-                                // Body text with dynamic line height
+
                                 VStack(alignment: .leading, spacing: 0) {
                                     Text("This is a paragraph with ")
                                     + Text("bold").fontWeight(.bold)
@@ -160,13 +176,12 @@ struct MarkdownSettingsView: View {
                                 .font(.system(size: CGFloat(fontSize)))
                                 .lineSpacing(lineHeight - 1.0)
                                 .foregroundColor(themeForeground)
-                                
-                                // Code block with syntax theme color
+
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Code example")
                                         .font(.system(size: CGFloat(codeFontSize), design: .monospaced))
                                         .foregroundColor(codeThemeColor)
-                                    
+
                                     Text("let x = 42")
                                         .font(.system(size: CGFloat(codeFontSize), design: .monospaced))
                                         .foregroundColor(codeThemeColor)
@@ -177,13 +192,12 @@ struct MarkdownSettingsView: View {
                             }
                             .padding(12)
                             .background(themeBackground)
-                            .cornerRadius(6)
+                            .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
+                                    .stroke(adaptiveTheme.borderSubtleC, lineWidth: 1)
                             )
-                            
-                            // Theme info
+
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Theme: \(theme)")
@@ -201,23 +215,25 @@ struct MarkdownSettingsView: View {
                                         .font(.caption2)
                                 }
                             }
-                            .foregroundColor(.secondary)
+                            .foregroundColor(adaptiveTheme.textSecondaryC)
                             .padding(8)
-                            .background(Color(.controlBackgroundColor).opacity(0.5))
-                            .cornerRadius(4)
+                            .background(
+                                RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall, style: .continuous)
+                                    .fill(adaptiveTheme.surfaceElevatedC)
+                            )
                         }
                         .padding(12)
                     }
-                    .background(Color(.controlBackgroundColor).opacity(0.3))
-                    .cornerRadius(6)
+                    .background(
+                        RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
+                            .fill(adaptiveTheme.backgroundC.opacity(0.3))
+                    )
                 }
                 .frame(maxWidth: 300)
                 .padding(12)
-                .background(Color(.controlBackgroundColor))
-                .cornerRadius(8)
+                .background(adaptiveTheme.surfaceElevatedC)
             }
         }
-        .padding()
     }
 }
 

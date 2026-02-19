@@ -525,95 +525,54 @@ class SettingsSync: ObservableObject {
     }
 }
 
-// MARK: - Sync Status View
-
-struct SyncStatusIndicator: View {
-    @ObservedObject var settingsSync: SettingsSync
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            switch settingsSync.syncStatus {
-            case .idle:
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-                    .font(.system(size: 12))
-                Text("Synced")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-            case .syncing:
-                ProgressView()
-                    .scaleEffect(0.8, anchor: .center)
-                Text("Syncing...")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-            case .success:
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-                    .font(.system(size: 12))
-                Text("Saved")
-                    .font(.caption)
-                    .foregroundColor(.green)
-                
-            case .error(let message):
-                Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundColor(.red)
-                    .font(.system(size: 12))
-                Text(message)
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
-            
-            Spacer()
-            
-            if let lastSync = settingsSync.lastSyncTime {
-                Text("Last sync: \(lastSync.formatted(date: .omitted, time: .shortened))")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding(10)
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(6)
-    }
-}
+// MARK: - External Conflict Notice
 
 struct ExternalConflictNotice: View {
     @ObservedObject var settingsSync: SettingsSync
     let onReload: () -> Void
-    
+
+    @Environment(\.adaptiveTheme) private var theme
+
     var body: some View {
         if settingsSync.hasExternalChanges {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                        .font(.system(size: 14))
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Configuration Changed Externally")
-                            .font(.headline)
-                        Text("Your config file was modified outside of this app.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Spacer()
-                    
-                    Button(action: onReload) {
-                        Text("Reload")
-                            .font(.caption)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                    }
-                    .buttonStyle(.bordered)
+            HStack(spacing: AdaptiveTheme.spacing8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(theme.warningC)
+                    .font(.system(size: 14))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Configuration Changed Externally")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.textPrimaryC)
+                    Text("Your config file was modified outside of this app.")
+                        .font(.caption)
+                        .foregroundColor(theme.textSecondaryC)
                 }
+
+                Spacer()
+
+                Button(action: onReload) {
+                    Text("Reload")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(theme.accentC)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall, style: .continuous)
+                                .stroke(theme.accentC, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
             }
-            .padding(10)
-            .background(Color(.controlBackgroundColor))
-            .border(Color.orange.opacity(0.3), width: 1)
-            .cornerRadius(6)
+            .padding(AdaptiveTheme.spacing10)
+            .background(
+                RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
+                    .fill(theme.surfaceElevatedC)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
+                    .stroke(theme.warningC.opacity(0.3), lineWidth: 1)
+            )
         }
     }
 }

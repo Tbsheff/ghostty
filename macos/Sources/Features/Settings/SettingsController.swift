@@ -8,12 +8,14 @@ class SettingsController: NSWindowController, NSWindowDelegate {
     convenience init() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
-            styleMask: [.titled, .closable],
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
         window.title = "Settings"
-        window.center()
+        window.minSize = NSSize(width: 520, height: 440)
+        window.maxSize = NSSize(width: 900, height: 800)
+        window.setFrameAutosaveName("GhosttySettings")
         self.init(window: window)
         window.delegate = self
         window.contentView = NSHostingView(rootView: SettingsView())
@@ -22,7 +24,10 @@ class SettingsController: NSWindowController, NSWindowDelegate {
     // MARK: - Functions
 
     func show() {
-        window?.center()
+        // Only center if no saved frame (first launch)
+        if !window!.setFrameUsingName("GhosttySettings") {
+            window?.center()
+        }
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

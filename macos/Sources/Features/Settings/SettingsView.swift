@@ -8,12 +8,10 @@ struct SettingItem: Identifiable {
     let title: String
     let description: String
     let category: String
-    let keywords: [String]  // Additional keywords for searching
+    let keywords: [String]
 }
 
-// Settings data model
 let settingsData: [SettingItem] = [
-    // General section
     SettingItem(
         id: "font-settings",
         title: "Font Settings",
@@ -28,8 +26,6 @@ let settingsData: [SettingItem] = [
         category: "general",
         keywords: ["working directory", "path", "directory", "cwd"]
     ),
-    
-    // Appearance section
     SettingItem(
         id: "appearance-settings",
         title: "Appearance Settings",
@@ -44,8 +40,6 @@ let settingsData: [SettingItem] = [
         category: "appearance",
         keywords: ["cursor", "blink", "style", "block", "underline", "bar"]
     ),
-    
-    // Behavior section
     SettingItem(
         id: "behavior-settings",
         title: "Behavior Settings",
@@ -60,8 +54,6 @@ let settingsData: [SettingItem] = [
         category: "behavior",
         keywords: ["mouse", "focus", "right click", "selection"]
     ),
-    
-    // Markdown section
     SettingItem(
         id: "markdown-settings",
         title: "Markdown Settings",
@@ -108,23 +100,14 @@ struct SettingsView: View {
     @ObservedObject private var settingsSync = SettingsSync.shared
     @Environment(\.adaptiveTheme) private var theme
 
-    private var quickAccessItems: [SettingItem] {
-        let ids = ["font-settings", "appearance-settings", "markdown-settings"]
-        return settingsData.filter { ids.contains($0.id) }
-    }
-
     var body: some View {
         VStack(spacing: 0) {
-            // Sync status and conflict notice
-            VStack(spacing: AdaptiveTheme.spacing8) {
-                SyncStatusIndicator(settingsSync: settingsSync)
-
-                ExternalConflictNotice(settingsSync: settingsSync) {
-                    settingsSync.loadFromConfigFile()
-                }
+            // Conflict notice (only when external changes detected)
+            ExternalConflictNotice(settingsSync: settingsSync) {
+                settingsSync.loadFromConfigFile()
             }
-            .padding(AdaptiveTheme.spacing10)
-            .background(theme.surfaceElevatedC.opacity(0.5))
+            .padding(.horizontal, AdaptiveTheme.spacing10)
+            .padding(.top, AdaptiveTheme.spacing8)
 
             // Search bar with category filter
             VStack(spacing: AdaptiveTheme.spacing8) {
@@ -134,7 +117,6 @@ struct SettingsView: View {
                 )
                 .help("Press Cmd+F to focus search")
 
-                // Category filter (shown when searching)
                 if !searchText.isEmpty {
                     Picker("Category", selection: $searchCategory) {
                         Text("All").tag("all")
@@ -156,7 +138,7 @@ struct SettingsView: View {
                 alignment: .bottom
             )
 
-            // Conditional content based on search
+            // Content area
             if searchText.isEmpty {
                 HStack(spacing: 0) {
                     SettingsSidebar(selection: $selectedTab)
@@ -166,20 +148,17 @@ struct SettingsView: View {
                         .fill(theme.borderSubtleC)
                         .frame(width: 1)
 
-                    VStack(spacing: 0) {
-                        QuickAccessPanel(items: quickAccessItems) { item in
-                            searchCategory = item.category
-                            searchText = item.title
-                        }
-
-                        selectedSettingsView
-                    }
+                    selectedSettingsView
                 }
             } else {
                 SearchableSettingsView(searchText: searchText, category: searchCategory)
             }
+
+            // Bottom sync status bar
+            SyncStatusBar(settingsSync: settingsSync)
+                .animation(.spring(response: AdaptiveTheme.springResponse, dampingFraction: AdaptiveTheme.springDamping), value: settingsSync.syncStatus.isActive)
         }
-        .frame(width: 560, height: 560)
+        .frame(minWidth: 520, minHeight: 440)
         .adaptiveThemeFromSystem()
         .onAppear {
             _ = SettingsSync.shared
@@ -200,6 +179,17 @@ struct SettingsView: View {
             MarkdownSettingsView()
         case .advanced:
             AdvancedSettingsView()
+        }
+    }
+}
+
+// MARK: - SyncStatus Helpers
+
+extension SettingsSync.SyncStatus {
+    var isActive: Bool {
+        switch self {
+        case .idle: return false
+        case .syncing, .success, .error: return true
         }
     }
 }
@@ -316,109 +306,6 @@ struct SettingsSidebar: View {
     }
 }
 
-// MARK: - Quick Access
-
-struct QuickAccessPanel: View {
-    let items: [SettingItem]
-    let onSelect: (SettingItem) -> Void
-
-    @Environment(\.adaptiveTheme) private var theme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AdaptiveTheme.spacing8) {
-            HStack {
-                Text("Quick Access")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(theme.textMutedC)
-                    .textCase(.uppercase)
-                    .tracking(0.5)
-                Spacer()
-                Image(systemName: "bolt.fill")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(theme.accentC)
-            }
-            .padding(.horizontal, AdaptiveTheme.spacing10)
-
-            HStack(spacing: AdaptiveTheme.spacing10) {
-                ForEach(items.prefix(3)) { item in
-                    QuickAccessCard(item: item, onSelect: onSelect)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, AdaptiveTheme.spacing10)
-        }
-        .padding(.vertical, AdaptiveTheme.spacing8)
-        .background(theme.surfaceElevatedC.opacity(0.6))
-        .overlay(
-            Rectangle()
-                .fill(theme.borderSubtleC)
-                .frame(height: 1),
-            alignment: .bottom
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Quick Access to Common Settings")
-    }
-}
-
-struct QuickAccessCard: View {
-    let item: SettingItem
-    let onSelect: (SettingItem) -> Void
-
-    @Environment(\.adaptiveTheme) private var theme
-    @State private var isHovered = false
-    @FocusState private var isFocused: Bool
-
-    private var isActive: Bool { isHovered || isFocused }
-
-    var body: some View {
-        Button(action: { onSelect(item) }) {
-            VStack(alignment: .leading, spacing: AdaptiveTheme.spacing4) {
-                HStack {
-                    Text(item.title)
-                        .font(.system(size: 12, weight: .semibold))
-                    Spacer()
-                    if isActive {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(theme.accentC)
-                            .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                    }
-                }
-                Text(item.description)
-                    .font(.caption)
-                    .foregroundColor(theme.textSecondaryC)
-                    .lineLimit(2)
-            }
-            .padding(AdaptiveTheme.spacing8)
-            .frame(maxWidth: 180, alignment: .leading)
-            .foregroundColor(theme.textPrimaryC)
-        }
-        .buttonStyle(.plain)
-        .background(
-            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
-                .fill(isActive ? theme.surfaceHoverC : theme.surfaceElevatedC)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
-                .stroke(isActive ? theme.accentC.opacity(0.3) : theme.borderSubtleC, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous))
-        .onHover { hovering in
-            isHovered = hovering
-            if hovering {
-                NSCursor.pointingHand.push()
-            } else {
-                NSCursor.pop()
-            }
-        }
-        .focused($isFocused)
-        .animation(.linear(duration: AdaptiveTheme.animationFast), value: isActive)
-        .help("Scroll to \(item.category) settings")
-        .accessibilityLabel(item.title)
-        .accessibilityHint(item.description)
-    }
-}
-
 // MARK: - General Settings
 
 struct GeneralSettingsView: View {
@@ -431,96 +318,74 @@ struct GeneralSettingsView: View {
     @AppStorage("general.inheritSplitWorkingDirectory") private var inheritSplitWorkingDirectory = true
     @AppStorage("general.inheritFontSize") private var inheritFontSize = true
 
+    @Environment(\.adaptiveTheme) private var theme
+
     private var isFontFamilyValid: Bool {
         fontFamily.isEmpty || !fontFamily.contains("/")
     }
-    
+
     private var fontFamilyErrorMessage: String? {
         guard !fontFamily.isEmpty && !isFontFamilyValid else { return nil }
         return "Font family cannot contain path separators"
     }
-    
-    private var isFontSizeValid: Bool {
-        fontSize >= 8 && fontSize <= 32
-    }
-    
-    private var fontSizeErrorMessage: String? {
-        guard !isFontSizeValid else { return nil }
-        if fontSize < 8 {
-            return "Font size must be at least 8"
-        } else if fontSize > 32 {
-            return "Font size cannot exceed 32"
-        }
-        return nil
-    }
-    
+
     var body: some View {
-        Form {
-            Section("Font") {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        TextField("Font Family", text: $fontFamily)
-                        if !fontFamily.isEmpty {
-                            Image(systemName: isFontFamilyValid ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                                .foregroundColor(isFontFamilyValid ? .green : .red)
-                                .font(.system(size: 12))
-                        }
-                    }
-                    if let error = fontFamilyErrorMessage {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                }
+        SettingsFormContainer {
+            ThemedSection(header: "Font") {
+                ThemedTextField(
+                    label: "Font Family",
+                    text: $fontFamily,
+                    placeholder: "e.g. JetBrains Mono",
+                    errorMessage: fontFamilyErrorMessage,
+                    isValid: isFontFamilyValid
+                )
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("Font Size: \(Int(fontSize))")
-                        Slider(value: $fontSize, in: 8...32, step: 1)
-                        Image(systemName: isFontSizeValid ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                            .foregroundColor(isFontSizeValid ? .green : .red)
-                            .font(.system(size: 12))
-                    }
-                    if let error = fontSizeErrorMessage {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                }
+                ThemedSlider(
+                    label: "Font Size",
+                    value: $fontSize,
+                    range: 8...32,
+                    step: 1,
+                    format: "%.0f",
+                    suffix: "pt"
+                )
 
-                Toggle("Inherit font size for new windows", isOn: $inheritFontSize)
+                ThemedToggle(
+                    label: "Inherit font size",
+                    description: "Apply to new windows",
+                    isOn: $inheritFontSize
+                )
             }
 
-            Section("Working Directory") {
-                Picker("Default Directory", selection: $workingDirectoryMode) {
-                    Text("Inherit").tag("inherit")
-                    Text("Custom").tag("custom")
-                }
-                .pickerStyle(.segmented)
+            ThemedSection(header: "Working Directory") {
+                ThemedPicker(
+                    label: "Default Directory",
+                    selection: $workingDirectoryMode,
+                    style: .segmented,
+                    options: [("Inherit", "inherit"), ("Custom", "custom")]
+                )
 
                 if workingDirectoryMode == "custom" {
-                    TextField("Path", text: $workingDirectory)
+                    ThemedTextField(
+                        label: "Path",
+                        text: $workingDirectory,
+                        placeholder: "/Users/..."
+                    )
                 }
 
-                Toggle("Inherit for new windows", isOn: $inheritWindowWorkingDirectory)
-                Toggle("Inherit for new tabs", isOn: $inheritTabWorkingDirectory)
-                Toggle("Inherit for new splits", isOn: $inheritSplitWorkingDirectory)
+                ThemedToggle(label: "Inherit for new windows", isOn: $inheritWindowWorkingDirectory)
+                ThemedToggle(label: "Inherit for new tabs", isOn: $inheritTabWorkingDirectory)
+                ThemedToggle(label: "Inherit for new splits", isOn: $inheritSplitWorkingDirectory)
             }
 
-            Section {
-                Text("Changes are saved automatically to your Ghostty config file.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            AutoSaveFooter()
         }
-        .padding()
     }
 }
 
 // MARK: - Appearance Settings
 
 struct AppearanceSettingsView: View {
-    @AppStorage("appearance.theme") private var theme = ""
+    @AppStorage("appearance.theme") private var themeName = ""
     @AppStorage("appearance.windowTheme") private var windowTheme = "auto"
     @AppStorage("appearance.cursorStyle") private var cursorStyle = "block"
     @AppStorage("appearance.cursorBlink") private var cursorBlink = "auto"
@@ -529,79 +394,107 @@ struct AppearanceSettingsView: View {
     @AppStorage("appearance.backgroundBlurRadius") private var backgroundBlurRadius: Double = 20
     @AppStorage("appearance.unfocusedSplitOpacity") private var unfocusedSplitOpacity: Double = 0.7
 
-    var body: some View {
-        Form {
-            Section("Theme") {
-                TextField("Theme", text: $theme)
+    @Environment(\.adaptiveTheme) private var theme
 
-                Picker("Window Theme", selection: $windowTheme) {
-                    Text("Auto").tag("auto")
-                    Text("System").tag("system")
-                    Text("Light").tag("light")
-                    Text("Dark").tag("dark")
-                    Text("Ghostty").tag("ghostty")
-                }
+    var body: some View {
+        SettingsFormContainer {
+            ThemedSection(header: "Theme") {
+                ThemedTextField(
+                    label: "Theme",
+                    text: $themeName,
+                    placeholder: "e.g. Rose Pine"
+                )
+
+                ThemedPicker(
+                    label: "Window Theme",
+                    selection: $windowTheme,
+                    options: [
+                        ("Auto", "auto"),
+                        ("System", "system"),
+                        ("Light", "light"),
+                        ("Dark", "dark"),
+                        ("Ghostty", "ghostty"),
+                    ]
+                )
 
                 Text("Use light/dark pairs like \"light:Rose Pine Dawn,dark:Rose Pine\".")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(theme.textSecondaryC)
+                    .padding(.vertical, AdaptiveTheme.spacing4)
             }
 
-            Section("Cursor") {
-                Picker("Style", selection: $cursorStyle) {
-                    Text("Block").tag("block")
-                    Text("Underline").tag("underline")
-                    Text("Bar").tag("bar")
-                    Text("Hollow Block").tag("block_hollow")
-                }
+            ThemedSection(header: "Cursor") {
+                ThemedPicker(
+                    label: "Style",
+                    selection: $cursorStyle,
+                    options: [
+                        ("Block", "block"),
+                        ("Underline", "underline"),
+                        ("Bar", "bar"),
+                        ("Hollow Block", "block_hollow"),
+                    ]
+                )
 
-                Picker("Blink", selection: $cursorBlink) {
-                    Text("Auto").tag("auto")
-                    Text("On").tag("true")
-                    Text("Off").tag("false")
-                }
+                ThemedPicker(
+                    label: "Blink",
+                    selection: $cursorBlink,
+                    options: [
+                        ("Auto", "auto"),
+                        ("On", "true"),
+                        ("Off", "false"),
+                    ]
+                )
             }
 
-            Section("Transparency") {
-                HStack {
-                    Text("Background Opacity: \(backgroundOpacity, specifier: "%.2f")")
-                    Slider(value: $backgroundOpacity, in: 0.0...1.0, step: 0.05)
-                }
+            ThemedSection(header: "Transparency") {
+                ThemedSlider(
+                    label: "Background Opacity",
+                    value: $backgroundOpacity,
+                    range: 0.0...1.0,
+                    step: 0.05,
+                    format: "%.2f"
+                )
 
-                Picker("Background Blur", selection: $backgroundBlurMode) {
-                    Text("Off").tag("off")
-                    Text("Standard").tag("standard")
-                    Text("Glass (Regular)").tag("macos-glass-regular")
-                    Text("Glass (Clear)").tag("macos-glass-clear")
-                    Text("Custom").tag("custom")
-                }
+                ThemedPicker(
+                    label: "Background Blur",
+                    selection: $backgroundBlurMode,
+                    options: [
+                        ("Off", "off"),
+                        ("Standard", "standard"),
+                        ("Glass (Regular)", "macos-glass-regular"),
+                        ("Glass (Clear)", "macos-glass-clear"),
+                        ("Custom", "custom"),
+                    ]
+                )
 
                 if backgroundBlurMode == "custom" {
-                    HStack {
-                        Text("Blur Radius: \(Int(backgroundBlurRadius))")
-                        Slider(value: $backgroundBlurRadius, in: 0...50, step: 1)
-                    }
+                    ThemedSlider(
+                        label: "Blur Radius",
+                        value: $backgroundBlurRadius,
+                        range: 0...50,
+                        step: 1,
+                        format: "%.0f"
+                    )
                 }
 
                 Text("Changing background opacity or blur may require restarting Ghostty on macOS.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(theme.textSecondaryC)
+                    .padding(.vertical, AdaptiveTheme.spacing4)
             }
 
-            Section("Splits") {
-                HStack {
-                    Text("Unfocused Split Opacity: \(unfocusedSplitOpacity, specifier: "%.2f")")
-                    Slider(value: $unfocusedSplitOpacity, in: 0.15...1.0, step: 0.05)
-                }
+            ThemedSection(header: "Splits") {
+                ThemedSlider(
+                    label: "Unfocused Split Opacity",
+                    value: $unfocusedSplitOpacity,
+                    range: 0.15...1.0,
+                    step: 0.05,
+                    format: "%.2f"
+                )
             }
 
-            Section {
-                Text("Changes are saved automatically to your Ghostty config file.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            AutoSaveFooter()
         }
-        .padding()
     }
 }
 
@@ -615,58 +508,74 @@ struct BehaviorSettingsView: View {
     @AppStorage("behavior.focusFollowsMouse") private var focusFollowsMouse = false
     @AppStorage("behavior.rightClickAction") private var rightClickAction = "context-menu"
 
+    @Environment(\.adaptiveTheme) private var theme
+
     var body: some View {
-        Form {
-            Section("Scrollback") {
-                HStack {
-                    Text("Limit: \(Int(scrollbackLimitMB)) MB")
-                    Slider(value: $scrollbackLimitMB, in: 1...500, step: 1)
-                }
+        SettingsFormContainer {
+            ThemedSection(header: "Scrollback") {
+                ThemedSlider(
+                    label: "Limit",
+                    value: $scrollbackLimitMB,
+                    range: 1...500,
+                    step: 1,
+                    format: "%.0f",
+                    suffix: " MB"
+                )
 
                 Text("Applies per terminal surface and affects new windows/tabs only.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(theme.textSecondaryC)
+                    .padding(.vertical, AdaptiveTheme.spacing4)
             }
 
-            Section("Clipboard") {
-                Picker("Copy on Select", selection: $copyOnSelect) {
-                    Text("Off").tag("false")
-                    Text("On").tag("true")
-                    Text("Clipboard + Selection").tag("clipboard")
-                }
+            ThemedSection(header: "Clipboard") {
+                ThemedPicker(
+                    label: "Copy on Select",
+                    selection: $copyOnSelect,
+                    options: [
+                        ("Off", "false"),
+                        ("On", "true"),
+                        ("Clipboard + Selection", "clipboard"),
+                    ]
+                )
 
-                Toggle("Paste protection", isOn: $clipboardPasteProtection)
+                ThemedToggle(label: "Paste protection", isOn: $clipboardPasteProtection)
             }
 
-            Section("Mouse") {
-                Toggle("Hide while typing", isOn: $mouseHideWhileTyping)
-                Toggle("Focus follows mouse", isOn: $focusFollowsMouse)
+            ThemedSection(header: "Mouse") {
+                ThemedToggle(label: "Hide while typing", isOn: $mouseHideWhileTyping)
+                ThemedToggle(label: "Focus follows mouse", isOn: $focusFollowsMouse)
 
-                Picker("Right Click", selection: $rightClickAction) {
-                    Text("Context Menu").tag("context-menu")
-                    Text("Paste").tag("paste")
-                    Text("Copy").tag("copy")
-                    Text("Copy or Paste").tag("copy-or-paste")
-                    Text("Ignore").tag("ignore")
-                }
+                ThemedPicker(
+                    label: "Right Click",
+                    selection: $rightClickAction,
+                    options: [
+                        ("Context Menu", "context-menu"),
+                        ("Paste", "paste"),
+                        ("Copy", "copy"),
+                        ("Copy or Paste", "copy-or-paste"),
+                        ("Ignore", "ignore"),
+                    ]
+                )
             }
 
-            Section {
-                Text("Changes are saved automatically to your Ghostty config file.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            AutoSaveFooter()
         }
-        .padding()
     }
 }
 
 // MARK: - Advanced Settings
 
 struct AdvancedSettingsView: View {
+    @Environment(\.adaptiveTheme) private var theme
+
     var body: some View {
-        Text("Advanced settings coming soon")
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        SettingsFormContainer {
+            Text("Advanced settings coming soon")
+                .font(.system(size: 13))
+                .foregroundColor(theme.textMutedC)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        }
     }
 }
 
