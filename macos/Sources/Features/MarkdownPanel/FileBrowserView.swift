@@ -170,6 +170,10 @@ struct FileBrowserView: View {
         .onAppear {
             loadDirectory()
         }
+        .onChange(of: searchText) { _ in
+            // Reset keyboard navigation when filter changes
+            selectedItemIndex = -1
+        }
         .onChange(of: rootPath) { _ in
             // Clear stale state when directory changes
             expandedDirs.removeAll()

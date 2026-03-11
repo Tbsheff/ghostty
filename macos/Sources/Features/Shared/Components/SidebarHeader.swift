@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Action button definition for sidebar headers
 struct HeaderAction: Identifiable {
-    let id = UUID()
+    var id: String { "\(icon)-\(tooltip)" }
     let icon: String
     let tooltip: String
     let action: () -> Void

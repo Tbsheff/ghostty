@@ -20,6 +20,7 @@ struct ActivityIndicator: View {
                 .frame(width: size, height: size)
                 .rotationEffect(.degrees(rotation))
                 .onAppear {
+                    rotation = 0
                     withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
                         rotation = 360
                     }
@@ -57,10 +58,12 @@ struct DotActivityIndicator: View {
 
     private func startDotCycle() {
         dotTimer?.invalidate()
-        dotTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
+        let timer = Timer(timeInterval: 0.3, repeats: true) { _ in
             withAnimation(.easeInOut(duration: 0.2)) {
                 activeDot = (activeDot + 1) % 3
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        dotTimer = timer
     }
 }

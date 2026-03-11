@@ -49,6 +49,9 @@ class MarkdownPanelState: ObservableObject {
     private var debounceTimer: Timer?
     private let debounceInterval: TimeInterval = 0.15  // 150ms debounce
 
+    /// Generation counter to prevent stale Task completions from writing state
+    private var loadGeneration: Int = 0
+
     init() {
         let defaults = UserDefaults.standard
         self.fileBrowserVisible = defaults.bool(forKey: Self.fileBrowserVisibleKey)
@@ -64,16 +67,22 @@ class MarkdownPanelState: ObservableObject {
         // Show panel immediately for responsiveness
         markdownVisible = true
 
+        // Increment generation so any in-flight tasks become stale
+        loadGeneration += 1
+        let currentGeneration = loadGeneration
+
         // Read file on background queue to avoid blocking UI
-        Task.detached(priority: .userInitiated) {
+        Task.detached(priority: .userInitiated) { [weak self] in
             do {
                 let fileContent = try String(contentsOfFile: path, encoding: .utf8)
                 await MainActor.run {
+                    guard let self, self.loadGeneration == currentGeneration else { return }
                     self.content = fileContent
                     self.startWatching(path: path)
                 }
             } catch {
                 await MainActor.run {
+                    guard let self, self.loadGeneration == currentGeneration else { return }
                     self.content = "**Error:** Could not read file\n\n\(error.localizedDescription)"
                 }
             }
@@ -172,6 +181,11 @@ class MarkdownPanelState: ObservableObject {
         debounceTimer = nil
         fileWatcher?.cancel()
         fileWatcher = nil
+    }
+
+    deinit {
+        debounceTimer?.invalidate()
+        fileWatcher?.cancel()
     }
 
 }

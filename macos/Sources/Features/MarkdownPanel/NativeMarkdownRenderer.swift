@@ -690,7 +690,7 @@ struct NativeMarkdownView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(blocks.enumerated()), id: \.element.id) { index, block in
+                    ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
                         MarkdownBlockView(block: block, theme: theme, basePath: basePath, onExecuteCode: onExecuteCode)
                             .id(index)
                     }
@@ -1014,9 +1014,12 @@ struct ImageBlockView: View {
         !url.hasPrefix("http://") && !url.hasPrefix("https://") && !url.hasPrefix("data:")
     }
 
+    @State private var loadedImage: NSImage?
+    @State private var imageLoadFailed = false
+
     /// Resolve local file path (relative paths resolved against basePath)
     /// Returns nil for absolute paths outside basePath (path traversal protection)
-    private var localImage: NSImage? {
+    private var resolvedLocalPath: String? {
         var resolvedPath: String
 
         if url.hasPrefix("/") {
@@ -1040,25 +1043,26 @@ struct ImageBlockView: View {
         if let base = basePath, !url.hasPrefix("/"), !url.hasPrefix("file://") {
             let canonicalBase = (base as NSString).standardizingPath
             guard resolvedPath.hasPrefix(canonicalBase) else {
-                // Attempted path traversal (e.g., ../../../etc/passwd)
                 return nil
             }
         }
 
-        return NSImage(contentsOfFile: resolvedPath)
+        return resolvedPath
     }
 
     var body: some View {
         Group {
             if isLocalFile {
-                // Local file: use NSImage directly
-                if let nsImage = localImage {
+                // Local file: load asynchronously to avoid blocking main thread
+                if let nsImage = loadedImage {
                     Image(nsImage: nsImage)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .cornerRadius(8)
-                } else {
+                } else if imageLoadFailed {
                     errorView
+                } else {
+                    loadingView
                 }
             } else {
                 // Remote URL: use AsyncImage
@@ -1081,6 +1085,17 @@ struct ImageBlockView: View {
         }
         .frame(maxWidth: 600, alignment: .leading)
         .padding(.vertical, 12)
+        .task(id: url) {
+            guard isLocalFile, let path = resolvedLocalPath else { return }
+            let imagePath = path
+            let image = await Task.detached(priority: .utility) {
+                NSImage(contentsOfFile: imagePath)
+            }.value
+            if !Task.isCancelled {
+                loadedImage = image
+                imageLoadFailed = image == nil
+            }
+        }
     }
 
     private var errorView: some View {

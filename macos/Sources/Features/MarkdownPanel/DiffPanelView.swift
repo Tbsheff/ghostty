@@ -31,14 +31,16 @@ struct DiffHunk: Identifiable {
 
 /// Represents a single file's diff
 struct DiffFile: Identifiable {
-    var id: String { "\(oldPath)-\(newPath)" }
+    let fileIndex: Int
+    var id: Int { fileIndex }
     let oldPath: String
     let newPath: String
     let hunks: [DiffHunk]
     let additions: Int
     let deletions: Int
 
-    init(oldPath: String, newPath: String, hunks: [DiffHunk]) {
+    init(fileIndex: Int, oldPath: String, newPath: String, hunks: [DiffHunk]) {
+        self.fileIndex = fileIndex
         self.oldPath = oldPath
         self.newPath = newPath
         self.hunks = hunks
@@ -74,7 +76,11 @@ struct DiffFile: Identifiable {
 /// Parses unified diff format output from `git diff`
 enum DiffParser {
     static func parse(_ input: String) -> [DiffFile] {
-        let lines = input.components(separatedBy: "\n")
+        var lines = input.components(separatedBy: "\n")
+        // Remove trailing empty element from trailing newline to prevent phantom context line
+        if lines.last?.isEmpty == true {
+            lines.removeLast()
+        }
         var files: [DiffFile] = []
         var currentOldPath: String?
         var currentNewPath: String?
@@ -85,6 +91,7 @@ enum DiffParser {
         var newLineNum = 0
         var lineSequence = 0  // Global sequential counter for unique DiffLine IDs
         var hunkSequence = 0  // Global sequential counter for unique DiffHunk IDs
+        var fileSequence = 0  // Global sequential counter for unique DiffFile IDs
 
         func flushHunk() {
             if let header = currentHunkHeader, !currentHunkLines.isEmpty {
@@ -98,7 +105,8 @@ enum DiffParser {
         func flushFile() {
             flushHunk()
             if let oldPath = currentOldPath, let newPath = currentNewPath {
-                files.append(DiffFile(oldPath: oldPath, newPath: newPath, hunks: currentHunks))
+                files.append(DiffFile(fileIndex: fileSequence, oldPath: oldPath, newPath: newPath, hunks: currentHunks))
+                fileSequence += 1
             }
             currentOldPath = nil
             currentNewPath = nil
@@ -248,9 +256,10 @@ enum GitDiffRunner {
 
                 do {
                     try process.run()
+                    // Read all data BEFORE waitUntilExit to prevent pipe buffer deadlock
+                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
                     process.waitUntilExit()
 
-                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
                     let output = String(data: data, encoding: .utf8)
                     continuation.resume(returning: output)
                 } catch {
@@ -304,6 +313,7 @@ struct DiffPanelView: View {
     @State private var compareMode: DiffCompareMode = .uncommitted
     @State private var errorMessage: String?
     @State private var loadTask: Task<Void, Never>?
+    @State private var loadGeneration: Int = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -339,6 +349,7 @@ struct DiffPanelView: View {
         .frame(minWidth: 280)
         .background(theme.backgroundC)
         .onAppear { loadDiff() }
+        .onDisappear { loadTask?.cancel() }
         .onChange(of: cwd) { _ in loadDiff() }
         .onChange(of: compareMode) { _ in loadDiff() }
     }
@@ -352,6 +363,8 @@ struct DiffPanelView: View {
         loadTask?.cancel()
         isLoading = true
         errorMessage = nil
+        loadGeneration += 1
+        let currentGeneration = loadGeneration
 
         loadTask = Task {
             let output: String?
@@ -368,8 +381,9 @@ struct DiffPanelView: View {
                 output = await GitDiffRunner.runLastCommit(in: cwd)
             }
 
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, currentGeneration == loadGeneration else { return }
             await MainActor.run {
+                guard currentGeneration == loadGeneration else { return }
                 isLoading = false
                 if let output, !output.isEmpty {
                     files = DiffParser.parse(output)
@@ -819,7 +833,7 @@ struct SplitDiffView: View {
 
             // Line number
             let num = side == .old ? line?.oldLineNumber : line?.newLineNumber
-            Text(num.flatMap { String($0) } ?? "")
+            Text(num.map { String($0) } ?? "")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(theme.textMutedC)
                 .frame(width: lineNumberWidth, alignment: .trailing)

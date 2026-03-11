@@ -122,6 +122,9 @@ struct MermaidView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
+        // Keep coordinator's parent reference current so bindings stay fresh
+        context.coordinator.parent = self
+
         // Reload if code or theme changes
         if context.coordinator.lastCode != code || context.coordinator.lastTheme != mermaidTheme {
             context.coordinator.lastCode = code
@@ -173,7 +176,8 @@ struct MermaidView: NSViewRepresentable {
         webView.loadHTMLString(html, baseURL: nil)
 
         if cachedScript == nil {
-            MermaidScriptCache.fetchIfNeeded { script in
+            MermaidScriptCache.fetchIfNeeded { [weak webView] script in
+                guard let webView else { return }
                 guard let script = script else {
                     loadFailed = true
                     return
@@ -385,23 +389,25 @@ private enum MermaidScriptCache {
     private static var pending: [(String?) -> Void] = []
 
     static func cachedScript() -> String? {
-        if let inMemory {
-            return inMemory
+        queue.sync {
+            if let inMemory {
+                return inMemory
+            }
+            if let cached = UserDefaults.standard.string(forKey: cacheKey), !cached.isEmpty {
+                inMemory = cached
+                return cached
+            }
+            return nil
         }
-        if let cached = UserDefaults.standard.string(forKey: cacheKey), !cached.isEmpty {
-            inMemory = cached
-            return cached
-        }
-        return nil
     }
 
     static func fetchIfNeeded(completion: @escaping (String?) -> Void) {
-        if let cached = cachedScript() {
-            completion(cached)
-            return
-        }
-
         queue.async {
+            if let inMemory {
+                DispatchQueue.main.async { completion(inMemory) }
+                return
+            }
+
             pending.append(completion)
 
             if isFetching {

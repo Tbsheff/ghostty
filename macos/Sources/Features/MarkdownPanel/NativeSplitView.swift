@@ -55,6 +55,9 @@ struct NativeSplitView<Left: View, Center: View, Right: View>: NSViewControllerR
     }
 
     func updateNSViewController(_ controller: NativeSplitViewController, context: Context) {
+        // Refresh coordinator's parent so bindings stay current
+        context.coordinator.parent = self
+
         // Update content in existing hosting views (don't recreate - that causes infinite loop)
         controller.updateLeftContent(leftContent)
         controller.updateCenterContent(centerContent)
@@ -425,6 +428,9 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
             if animated {
                 isAnimating = false
             }
+            // Clear pending state so it doesn't get stuck
+            pendingLeftVisible = nil
+            pendingRightVisible = nil
             return
         }
 
@@ -590,8 +596,10 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
             }
         }
 
-        // Check for adaptive collapse after resize
-        checkAndAutoCollapse()
+        // Defer auto-collapse to next run loop iteration to avoid re-entrant layout mutations
+        DispatchQueue.main.async { [weak self] in
+            self?.checkAndAutoCollapse()
+        }
 
         // Report new widths to delegate
         if isLeftVisible, let leftIndex = splitView.arrangedSubviews.firstIndex(of: leftContainer) {
