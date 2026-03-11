@@ -1696,7 +1696,9 @@ extension Ghostty {
                 guard let surface = target.target.surface else { return }
                 guard let surfaceView = self.surfaceView(from: surface) else { return }
                 guard let pwd = String(cString: v.pwd!, encoding: .utf8) else { return }
-                surfaceView.pwd = pwd
+                DispatchQueue.main.async { [weak surfaceView] in
+                    surfaceView?.pwd = pwd
+                }
 
             default:
                 assertionFailure()
