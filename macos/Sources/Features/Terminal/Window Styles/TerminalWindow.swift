@@ -20,10 +20,9 @@ class TerminalWindow: NSWindow {
 
     /// Update the panel visibility state in the view model
     func updatePanelState(fileBrowserVisible: Bool, markdownVisible: Bool) {
-        DispatchQueue.main.async {
-            self.viewModel.fileBrowserVisible = fileBrowserVisible
-            self.viewModel.markdownVisible = markdownVisible
-        }
+        // Called from Combine sink on @MainActor MarkdownPanelState — already on main.
+        viewModel.fileBrowserVisible = fileBrowserVisible
+        viewModel.markdownVisible = markdownVisible
     }
 
     /// Reset split zoom button in titlebar

@@ -600,17 +600,22 @@ class BaseTerminalController: NSWindowController,
     }
 
     @objc private func ghosttyToggleMarkdownPanel(_ notification: Notification) {
-        // Only handle if this is the key window to prevent all windows responding
-        guard window?.isKeyWindow == true else { return }
-        toggleMarkdownPanel(nil)
+        // Notification may arrive from a background thread (Zig IO callback),
+        // so dispatch to main to safely access @MainActor-isolated state.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.window?.isKeyWindow == true else { return }
+            self.toggleMarkdownPanel(nil)
+        }
     }
 
     @objc private func ghosttyOpenMarkdownFile(_ notification: Notification) {
-        // Only handle if this is the key window to prevent all windows responding
-        guard window?.isKeyWindow == true else { return }
         guard let path = notification.userInfo?["path"] as? String else { return }
-        // Load the file in the markdown panel
-        markdownPanelState.loadFile(at: path)
+        // Notification may arrive from a background thread (Zig IO callback),
+        // so dispatch to main to safely access @MainActor-isolated state.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.window?.isKeyWindow == true else { return }
+            self.markdownPanelState.loadFile(at: path)
+        }
     }
 
     @objc private func ghosttyDidCloseSurface(_ notification: Notification) {
