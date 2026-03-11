@@ -35,9 +35,29 @@ struct DiffFile: Identifiable {
     let oldPath: String
     let newPath: String
     let hunks: [DiffHunk]
+    let additions: Int
+    let deletions: Int
+
+    init(oldPath: String, newPath: String, hunks: [DiffHunk]) {
+        self.oldPath = oldPath
+        self.newPath = newPath
+        self.hunks = hunks
+        var adds = 0
+        var dels = 0
+        for hunk in hunks {
+            for line in hunk.lines {
+                switch line.type {
+                case .added: adds += 1
+                case .removed: dels += 1
+                default: break
+                }
+            }
+        }
+        self.additions = adds
+        self.deletions = dels
+    }
 
     var displayPath: String {
-        // Use new path for renames, otherwise just the path
         if oldPath == newPath || oldPath == "/dev/null" {
             return newPath
         }
@@ -543,14 +563,13 @@ struct DiffFileSection: View {
                         .truncationMode(.middle)
 
                     // Inline colored stats
-                    let stats = fileStats
-                    if stats.additions > 0 {
-                        Text("+\(stats.additions)")
+                    if file.additions > 0 {
+                        Text("+\(file.additions)")
                             .font(.system(size: 10, weight: .semibold, design: .monospaced))
                             .foregroundColor(theme.successC)
                     }
-                    if stats.deletions > 0 {
-                        Text("-\(stats.deletions)")
+                    if file.deletions > 0 {
+                        Text("-\(file.deletions)")
                             .font(.system(size: 10, weight: .semibold, design: .monospaced))
                             .foregroundColor(theme.dangerC)
                     }
@@ -592,21 +611,6 @@ struct DiffFileSection: View {
                 }
             }
         }
-    }
-
-    private var fileStats: (additions: Int, deletions: Int) {
-        var additions = 0
-        var deletions = 0
-        for hunk in file.hunks {
-            for line in hunk.lines {
-                switch line.type {
-                case .added: additions += 1
-                case .removed: deletions += 1
-                default: break
-                }
-            }
-        }
-        return (additions, deletions)
     }
 }
 

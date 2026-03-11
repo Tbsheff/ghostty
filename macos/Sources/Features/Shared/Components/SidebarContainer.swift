@@ -30,7 +30,7 @@ struct SidebarContainer<Content: View>: View {
 }
 
 /// Applies accessibilityIdentifier only when non-nil
-private struct OptionalAccessibilityIdentifier: ViewModifier {
+struct OptionalAccessibilityIdentifier: ViewModifier {
     let identifier: String?
 
     func body(content: Content) -> some View {

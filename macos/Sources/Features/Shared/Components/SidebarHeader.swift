@@ -102,39 +102,3 @@ struct SidebarDivider: View {
             .padding(.horizontal, AdaptiveTheme.spacing8)
     }
 }
-
-// MARK: - Project Header
-
-/// Sidebar project/folder header with icon and title
-struct SidebarProjectHeader: View {
-    let name: String
-    var icon: String = "folder.fill"
-
-    @Environment(\.adaptiveTheme) private var theme
-
-    var body: some View {
-        HStack(spacing: AdaptiveTheme.spacing8) {
-            Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundColor(theme.folderIconC)
-
-            Text(name)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(theme.textPrimaryC)
-                .lineLimit(1)
-
-            Spacer()
-        }
-        .padding(.horizontal, AdaptiveTheme.spacing12)
-        .padding(.vertical, AdaptiveTheme.spacing10)
-        .background(
-            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
-                .fill(theme.surfaceElevatedC)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
-                .stroke(theme.borderSubtleC, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous))
-    }
-}

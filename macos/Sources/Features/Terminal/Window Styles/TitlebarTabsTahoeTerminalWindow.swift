@@ -633,7 +633,7 @@ extension TitlebarTabsTahoeTerminalWindow {
                     .foregroundColor(buttonColor)
             }
             .buttonStyle(.plain)
-            .modifier(AccessibilityIdentifierModifier(identifier: accessibilityIdentifier))
+            .modifier(OptionalAccessibilityIdentifier(identifier: accessibilityIdentifier))
             .frame(width: 28, height: 22)
             .background(backgroundColor)
             .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium))

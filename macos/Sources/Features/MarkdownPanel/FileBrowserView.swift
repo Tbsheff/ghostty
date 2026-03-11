@@ -22,8 +22,6 @@ struct FileBrowserView: View {
     @State private var loadGeneration: Int = 0  // Prevents race conditions
     @State private var searchText: String = ""
     @State private var selectedItemIndex: Int = -1  // For keyboard navigation
-    @State private var recentFiles: [String] = []  // Persisted across sessions via UserDefaults
-    @AppStorage("ghostty.fileBrowserShowQuickAccess") private var showQuickAccess: Bool = true  // Persisted toggle state for unified accordion
     @State private var isDropTargetHighlighted = false  // For drag-and-drop visual feedback
 
     /// Effective path - terminal's CWD or fallback to home directory
@@ -33,24 +31,6 @@ struct FileBrowserView: View {
 
     private var projectName: String {
         return URL(fileURLWithPath: effectivePath).lastPathComponent
-    }
-
-    /// Breadcrumb components from current path
-    private var breadcrumbComponents: [(name: String, path: String)] {
-        let url = URL(fileURLWithPath: effectivePath)
-        var components: [(String, String)] = [("Home", NSHomeDirectory())]
-
-        guard effectivePath != NSHomeDirectory() else { return components }
-
-        let pathComponents = url.pathComponents
-        var currentPath = ""
-
-        for component in pathComponents where component != "/" {
-            currentPath = (currentPath as NSString).appendingPathComponent(component)
-            components.append((component, currentPath))
-        }
-
-        return components
     }
 
     /// Filtered items based on search text
@@ -128,7 +108,6 @@ struct FileBrowserView: View {
                                         selectedPath: $selectedPath,
                                         onFileSelected: { path in
                                             selectedPath = path
-                                            addToRecentFiles(path)
                                             onFileSelected(path)
                                         },
                                         showHiddenFiles: showHiddenFiles
@@ -190,16 +169,12 @@ struct FileBrowserView: View {
         .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusLarge, style: .continuous))
         .onAppear {
             loadDirectory()
-            loadRecentFilesFromStorage()
         }
         .onChange(of: rootPath) { _ in
             // Clear stale state when directory changes
             expandedDirs.removeAll()
             selectedPath = nil
             loadDirectory()
-        }
-        .onChange(of: recentFiles) { _ in
-            saveRecentFilesToStorage()
         }
         .backport.onKeyPress(.upArrow) { _ in handleKeyboardNavigation(direction: .up) }
         .backport.onKeyPress(.downArrow) { _ in handleKeyboardNavigation(direction: .down) }
@@ -265,37 +240,10 @@ struct FileBrowserView: View {
         } else {
             // Select file
             selectedPath = item.path
-            addToRecentFiles(item.path)
             onFileSelected(item.path)
         }
 
         return .handled
-    }
-
-    /// Add file to recent files (persisted, max 10 entries)
-    private func addToRecentFiles(_ filePath: String) {
-        // Remove if already exists, then insert at beginning
-        recentFiles.removeAll { $0 == filePath }
-        recentFiles.insert(filePath, at: 0)
-
-        // Keep max 10 recent files
-        if recentFiles.count > 10 {
-            recentFiles = Array(recentFiles.prefix(10))
-        }
-    }
-
-    /// Save recent files to UserDefaults
-    private func saveRecentFilesToStorage() {
-        let defaults = UserDefaults.standard
-        defaults.set(recentFiles, forKey: "ghostty.fileBrowserRecentFiles")
-    }
-
-    /// Load recent files from UserDefaults
-    private func loadRecentFilesFromStorage() {
-        let defaults = UserDefaults.standard
-        if let savedFiles = defaults.array(forKey: "ghostty.fileBrowserRecentFiles") as? [String] {
-            recentFiles = savedFiles
-        }
     }
 
     private func handleKeyboardEscape() -> BackportKeyPressResult {
@@ -325,7 +273,6 @@ struct FileBrowserView: View {
                     let fileName = url.lastPathComponent
                     if FileItemProcessor.isMarkdownFile(fileName) {
                         selectedPath = url.path
-                        addToRecentFiles(url.path)
                         onFileSelected(url.path)
                     }
                 }
@@ -366,54 +313,6 @@ struct FileBrowserView: View {
     }
 }
 
-// MARK: - Toolbar
-
-struct FileBrowserToolbar: View {
-    @Binding var showHiddenFiles: Bool
-    let onGoUp: () -> Void
-    let onOpenFinder: () -> Void
-    let canGoUp: Bool
-
-    @Environment(\.adaptiveTheme) private var theme
-
-    var body: some View {
-        HStack(spacing: AdaptiveTheme.spacing8) {
-            ToolbarIconButton(
-                icon: "arrow.up",
-                tooltip: "Parent directory",
-                action: onGoUp
-            )
-            .disabled(!canGoUp)
-            .opacity(canGoUp ? 1 : 0.4)
-
-            ToolbarIconButton(
-                icon: showHiddenFiles ? "eye.fill" : "eye.slash.fill",
-                tooltip: showHiddenFiles ? "Hide hidden files" : "Show hidden files",
-                action: { showHiddenFiles.toggle() }
-            )
-
-            Spacer()
-
-            ToolbarIconButton(
-                icon: "folder",
-                tooltip: "Reveal in Finder",
-                action: onOpenFinder
-            )
-        }
-        .padding(.horizontal, AdaptiveTheme.spacing12)
-        .padding(.vertical, AdaptiveTheme.spacing8)
-        .background(
-            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
-                .fill(theme.surfaceElevatedC)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous)
-                .stroke(theme.borderSubtleC, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium, style: .continuous))
-    }
-}
-
 struct ToolbarIconButton: View {
     let icon: String
     let tooltip: String
@@ -434,92 +333,6 @@ struct ToolbarIconButton: View {
         }
         .buttonStyle(.plain)
         .help(tooltip)
-        .onHover { isHovered = $0 }
-        .animation(.linear(duration: AdaptiveTheme.animationFast), value: isHovered)
-    }
-}
-
-// MARK: - Breadcrumb Bar
-
-struct BreadcrumbBar: View {
-    let components: [(name: String, path: String)]
-    let onNavigate: (String) -> Void
-
-    @Environment(\.adaptiveTheme) private var theme
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: AdaptiveTheme.spacing4) {
-                ForEach(Array(components.enumerated()), id: \.offset) { index, component in
-                    HStack(spacing: AdaptiveTheme.spacing4) {
-                        Button(action: { onNavigate(component.path) }) {
-                            Text(component.name)
-                                .font(.system(size: 11))
-                                .foregroundColor(theme.textMutedC)
-                                .lineLimit(1)
-                        }
-                        .buttonStyle(.plain)
-
-                        if index < components.count - 1 {
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(theme.textMutedC)
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, AdaptiveTheme.spacing10)
-            .padding(.vertical, AdaptiveTheme.spacing6)
-        }
-        .background(theme.surfaceElevatedC.opacity(0.5))
-    }
-}
-
-// MARK: - Recent File Button
-
-struct RecentFileButton: View {
-    let filePath: String
-    let onSelect: () -> Void
-
-    @Environment(\.adaptiveTheme) private var theme
-    @State private var isHovered = false
-
-    private var fileName: String {
-        URL(fileURLWithPath: filePath).lastPathComponent
-    }
-
-    private var parentPath: String {
-        URL(fileURLWithPath: filePath).deletingLastPathComponent().path
-    }
-
-    var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: AdaptiveTheme.spacing6) {
-                Image(systemName: "doc.text")
-                    .font(.system(size: 11, weight: .light))
-                    .foregroundColor(theme.textMutedC)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(fileName)
-                        .font(.system(size: 11))
-                        .foregroundColor(theme.textPrimaryC)
-                        .lineLimit(1)
-
-                    Text(parentPath)
-                        .font(.system(size: 9))
-                        .foregroundColor(theme.textMutedC)
-                        .lineLimit(1)
-                }
-
-                Spacer()
-            }
-            .padding(.horizontal, AdaptiveTheme.spacing8)
-            .padding(.vertical, AdaptiveTheme.spacing6)
-            .background(isHovered ? theme.surfaceHoverC : Color.clear)
-            .cornerRadius(AdaptiveTheme.radiusSmall)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .animation(.linear(duration: AdaptiveTheme.animationFast), value: isHovered)
     }
