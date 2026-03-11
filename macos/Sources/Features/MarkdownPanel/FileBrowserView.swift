@@ -240,6 +240,11 @@ struct FileBrowserView: View {
             }
         }
 
+        // Sync visual selection with keyboard position
+        if selectedItemIndex >= 0 && selectedItemIndex < filteredItems.count {
+            selectedPath = filteredItems[selectedItemIndex].path
+        }
+
         return .handled
     }
 

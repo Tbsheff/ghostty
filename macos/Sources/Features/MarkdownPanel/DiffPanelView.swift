@@ -5,8 +5,9 @@ import AppKit
 
 /// Represents a single line in a diff
 struct DiffLine: Identifiable {
-    /// Stable ID from position + type for SwiftUI diffing
-    var id: String { "\(oldLineNumber ?? 0)-\(newLineNumber ?? 0)-\(type)" }
+    /// Stable ID from sequential index + position + type for SwiftUI diffing
+    let sequenceIndex: Int
+    var id: String { "\(sequenceIndex)-\(oldLineNumber ?? 0)-\(newLineNumber ?? 0)-\(type)" }
     let type: LineType
     let content: String
     let oldLineNumber: Int?
@@ -22,7 +23,8 @@ struct DiffLine: Identifiable {
 
 /// Represents a hunk (section) of changes
 struct DiffHunk: Identifiable {
-    var id: String { header }
+    let hunkIndex: Int
+    var id: String { "\(hunkIndex)-\(header)" }
     let header: String
     let lines: [DiffLine]
 }
@@ -61,10 +63,13 @@ enum DiffParser {
         var currentHunkLines: [DiffLine] = []
         var oldLineNum = 0
         var newLineNum = 0
+        var lineSequence = 0  // Global sequential counter for unique DiffLine IDs
+        var hunkSequence = 0  // Global sequential counter for unique DiffHunk IDs
 
         func flushHunk() {
             if let header = currentHunkHeader, !currentHunkLines.isEmpty {
-                currentHunks.append(DiffHunk(header: header, lines: currentHunkLines))
+                currentHunks.append(DiffHunk(hunkIndex: hunkSequence, header: header, lines: currentHunkLines))
+                hunkSequence += 1
             }
             currentHunkHeader = nil
             currentHunkLines = []
@@ -131,37 +136,45 @@ enum DiffParser {
 
             if line.hasPrefix("+") {
                 currentHunkLines.append(DiffLine(
+                    sequenceIndex: lineSequence,
                     type: .added,
                     content: String(line.dropFirst()),
                     oldLineNumber: nil,
                     newLineNumber: newLineNum
                 ))
+                lineSequence += 1
                 newLineNum += 1
             } else if line.hasPrefix("-") {
                 currentHunkLines.append(DiffLine(
+                    sequenceIndex: lineSequence,
                     type: .removed,
                     content: String(line.dropFirst()),
                     oldLineNumber: oldLineNum,
                     newLineNumber: nil
                 ))
+                lineSequence += 1
                 oldLineNum += 1
             } else if line.hasPrefix(" ") {
                 currentHunkLines.append(DiffLine(
+                    sequenceIndex: lineSequence,
                     type: .context,
                     content: String(line.dropFirst()),
                     oldLineNumber: oldLineNum,
                     newLineNumber: newLineNum
                 ))
+                lineSequence += 1
                 oldLineNum += 1
                 newLineNum += 1
             } else if line.isEmpty && currentHunkHeader != nil {
                 // Empty line within a hunk is treated as context
                 currentHunkLines.append(DiffLine(
+                    sequenceIndex: lineSequence,
                     type: .context,
                     content: "",
                     oldLineNumber: oldLineNum,
                     newLineNumber: newLineNum
                 ))
+                lineSequence += 1
                 oldLineNum += 1
                 newLineNum += 1
             }
@@ -270,6 +283,7 @@ struct DiffPanelView: View {
     @State private var displayMode: DiffDisplayMode = .unified
     @State private var compareMode: DiffCompareMode = .uncommitted
     @State private var errorMessage: String?
+    @State private var loadTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -315,10 +329,11 @@ struct DiffPanelView: View {
             return
         }
 
+        loadTask?.cancel()
         isLoading = true
         errorMessage = nil
 
-        Task {
+        loadTask = Task {
             let output: String?
             switch compareMode {
             case .uncommitted:
@@ -333,6 +348,7 @@ struct DiffPanelView: View {
                 output = await GitDiffRunner.runLastCommit(in: cwd)
             }
 
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 isLoading = false
                 if let output, !output.isEmpty {

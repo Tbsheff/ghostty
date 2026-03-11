@@ -573,10 +573,9 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
     }
 
     func splitView(_ splitView: NSSplitView, resizeSubviewsWithOldSize oldSize: NSSize) {
-        // Check for adaptive collapse before resizing
-        checkAndAutoCollapse()
-        
-        // Custom resize behavior: center takes all extra space
+        // Custom resize behavior: center takes all extra space.
+        // Auto-collapse is handled in splitViewDidResizeSubviews to avoid
+        // re-entrant layout mutations during the layout pass.
         splitView.adjustSubviews()
     }
 

@@ -705,8 +705,11 @@ struct NativeMarkdownView: View {
                     withAnimation(.easeOut(duration: 0.35)) {
                         proxy.scrollTo(index, anchor: .top)
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        scrollTarget = nil
+                    // Only nil out if scrollTarget hasn't changed since we started
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        if scrollTarget == index {
+                            scrollTarget = nil
+                        }
                     }
                 }
             }

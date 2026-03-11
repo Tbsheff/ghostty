@@ -151,6 +151,10 @@ struct MarkdownPanelHeader: View {
 struct MarkdownWebView: NSViewRepresentable {
     let content: String
 
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
@@ -161,8 +165,14 @@ struct MarkdownWebView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
+        guard content != context.coordinator.lastContent else { return }
+        context.coordinator.lastContent = content
         let html = generateHTML(from: content)
         webView.loadHTMLString(html, baseURL: nil)
+    }
+
+    class Coordinator {
+        var lastContent: String?
     }
 
     private func generateHTML(from markdown: String) -> String {
