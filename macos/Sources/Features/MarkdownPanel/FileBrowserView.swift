@@ -98,7 +98,7 @@ struct FileBrowserView: View {
                     ScrollViewReader { proxy in
                         ScrollView {
                             LazyVStack(alignment: .leading, spacing: 0) {
-                                ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
+                                ForEach(filteredItems) { item in
                                     FileTreeRow(
                                         item: item,
                                         depth: 0,
@@ -112,7 +112,6 @@ struct FileBrowserView: View {
                                         },
                                         showHiddenFiles: showHiddenFiles
                                     )
-                                    .id(index)
                                 }
                             }
                             .padding(.vertical, AdaptiveTheme.spacing6)
@@ -121,7 +120,7 @@ struct FileBrowserView: View {
                         .onChange(of: selectedItemIndex) { newIndex in
                             if newIndex >= 0 && newIndex < filteredItems.count {
                                 withAnimation(.spring(response: AdaptiveTheme.springResponse, dampingFraction: AdaptiveTheme.springDamping)) {
-                                    proxy.scrollTo(newIndex, anchor: .center)
+                                    proxy.scrollTo(filteredItems[newIndex].id, anchor: .center)
                                 }
                             }
                         }
