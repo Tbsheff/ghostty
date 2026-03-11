@@ -463,11 +463,13 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
     // MARK: NSToolbarDelegate
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        return [.title, .fileBrowserToggle, .markdownToggle, .flexibleSpace, .space]
+        // Toggle buttons are manually placed in setupTabBar(), not via toolbar items
+        return [.title, .flexibleSpace, .space]
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        return [.fileBrowserToggle, .flexibleSpace, .title, .flexibleSpace, .markdownToggle]
+        // Toggle buttons are manually placed in setupTabBar(), not via toolbar items
+        return [.flexibleSpace, .title, .flexibleSpace]
     }
 
     func toolbar(_ toolbar: NSToolbar,
@@ -486,48 +488,6 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             // We don't want glass on our title.
             item.isBordered = false
 
-            return item
-        case .fileBrowserToggle:
-            let item = NSToolbarItem(itemIdentifier: .fileBrowserToggle)
-            let hostingView = NSHostingView(rootView: ToolbarToggleButton(
-                viewModel: viewModel,
-                icon: "sidebar.left",
-                isActiveKeyPath: \.fileBrowserVisible,
-                accessibilityIdentifier: "fileBrowser.toggle",
-                action: { [weak self] in
-                    self?.terminalController?.toggleFileBrowser(nil)
-                }
-            ))
-            hostingView.frame = NSRect(x: 0, y: 0, width: 28, height: 22)
-            hostingView.setAccessibilityIdentifier("fileBrowser.toggle")
-            hostingView.setAccessibilityRole(.button)
-            item.view = hostingView
-            item.isBordered = false
-            item.visibilityPriority = .high
-            item.toolTip = "Toggle File Browser (⌘B)"
-            item.minSize = NSSize(width: 28, height: 22)
-            item.maxSize = NSSize(width: 28, height: 22)
-            return item
-        case .markdownToggle:
-            let item = NSToolbarItem(itemIdentifier: .markdownToggle)
-            let hostingView = NSHostingView(rootView: ToolbarToggleButton(
-                viewModel: viewModel,
-                icon: "doc.richtext",
-                isActiveKeyPath: \.markdownVisible,
-                accessibilityIdentifier: "markdown.toggle",
-                action: { [weak self] in
-                    self?.terminalController?.toggleMarkdownPreview(nil)
-                }
-            ))
-            hostingView.frame = NSRect(x: 0, y: 0, width: 28, height: 22)
-            hostingView.setAccessibilityIdentifier("markdown.toggle")
-            hostingView.setAccessibilityRole(.button)
-            item.view = hostingView
-            item.isBordered = false
-            item.visibilityPriority = .high
-            item.toolTip = "Toggle Panel (⇧⌘M)"
-            item.minSize = NSSize(width: 28, height: 22)
-            item.maxSize = NSSize(width: 28, height: 22)
             return item
         default:
             return NSToolbarItem(itemIdentifier: itemIdentifier)
@@ -563,8 +523,6 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
 extension NSToolbarItem.Identifier {
     /// Displays the title of the window
     static let title = NSToolbarItem.Identifier("Title")
-    static let fileBrowserToggle = NSToolbarItem.Identifier("FileBrowserToggle")
-    static let markdownToggle = NSToolbarItem.Identifier("MarkdownToggle")
 }
 
 extension TitlebarTabsTahoeTerminalWindow {
