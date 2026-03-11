@@ -68,9 +68,9 @@ struct FileBrowserView: View {
 
             // Compact header: project name + toolbar actions in one row
             HStack(spacing: AdaptiveTheme.spacing6) {
-                Image(systemName: "folder.fill")
-                    .font(.system(size: 12))
-                    .foregroundColor(theme.folderIconC)
+                Image(systemName: "folder")
+                    .font(.system(size: 12, weight: .light))
+                    .foregroundColor(theme.textMutedC)
 
                 Text(projectName)
                     .font(.system(size: 12, weight: .semibold))
@@ -494,9 +494,9 @@ struct RecentFileButton: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: AdaptiveTheme.spacing6) {
-                Image(systemName: "doc.text.fill")
-                    .font(.system(size: 11))
-                    .foregroundColor(theme.markdownIconC)
+                Image(systemName: "doc.text")
+                    .font(.system(size: 11, weight: .light))
+                    .foregroundColor(theme.textMutedC)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(fileName)
@@ -568,9 +568,9 @@ struct FileTreeRow: View {
                 }
 
                 // Icon
-                Image(systemName: item.isDirectory ? "folder.fill" : "doc.text.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(item.isDirectory ? theme.folderIconC : theme.markdownIconC)
+                Image(systemName: item.isDirectory ? "folder" : "doc.text")
+                    .font(.system(size: 13, weight: .light))
+                    .foregroundColor(theme.textMutedC)
                     .frame(width: 20)
 
                 // File name
@@ -698,12 +698,7 @@ enum FileItemProcessor {
                     return nil
                 }
 
-                if isDir.boolValue {
-                    return FileItem(name: name, path: fullPath, isDirectory: true)
-                } else if isMarkdownFile(name) {
-                    return FileItem(name: name, path: fullPath, isDirectory: false)
-                }
-                return nil
+                return FileItem(name: name, path: fullPath, isDirectory: isDir.boolValue)
             }
             .sorted { lhs, rhs in
                 if lhs.isDirectory != rhs.isDirectory {

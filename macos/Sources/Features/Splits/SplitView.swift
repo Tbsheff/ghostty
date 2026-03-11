@@ -93,6 +93,7 @@ struct SplitView<L: View, R: View>: View {
     private func dragGesture(_ size: CGSize, splitterPoint: CGPoint) -> some Gesture {
         return DragGesture()
             .onChanged { gesture in
+                if !isDraggingSplit { isDraggingSplit = true }
                 switch direction {
                 case .horizontal:
                     let new = min(max(minSize, gesture.location.x), size.width - minSize)

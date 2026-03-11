@@ -1024,4 +1024,10 @@ extension Ghostty.Config {
         static let `default` = MacOSTitlebarStyle.transparent
         case native, transparent, tabs, hidden
     }
+
+    enum WindowShowTabBar: String {
+        case always
+        case auto
+        case never
+    }
 }

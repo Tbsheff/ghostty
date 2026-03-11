@@ -715,6 +715,20 @@ extension Ghostty {
                 url = URL(filePath: expandedPath)
             }
 
+            // Check if this is a markdown file - open in built-in panel instead of external app
+            if url.isFileURL && MarkdownFileDetector.isMarkdownFile(url) {
+                let path = url.path
+                // Verify the file exists before trying to open it
+                if FileManager.default.fileExists(atPath: path) {
+                    NotificationCenter.default.post(
+                        name: .ghosttyOpenMarkdownFile,
+                        object: nil,
+                        userInfo: ["path": path]
+                    )
+                    return true
+                }
+            }
+
             switch action.kind {
             case .text:
                 // Open with the default editor for `*.ghostty` file or just system text editor

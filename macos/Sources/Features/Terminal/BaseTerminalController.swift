@@ -54,6 +54,9 @@ class BaseTerminalController: NSWindowController,
     /// True when any surface in this controller currently has an active bell.
     @Published private(set) var bell: Bool = false
 
+    /// The markdown panel state for this terminal window.
+    let markdownPanelState = MarkdownPanelState()
+
     /// Whether the terminal surface should focus when the mouse is over it.
     var focusFollowsMouse: Bool {
         self.derivedConfig.focusFollowsMouse
@@ -88,6 +91,9 @@ class BaseTerminalController: NSWindowController,
 
     /// Cancellable for aggregating bell state across all surfaces in this controller.
     private var bellStateCancellable: AnyCancellable?
+
+    /// The cancellables for panel state observation.
+    private var panelStateCancellables: Set<AnyCancellable> = []
 
     /// An override title for the tab/window set by the user via prompt_tab_title.
     /// When set, this takes precedence over the computed title from the terminal.
@@ -1478,6 +1484,18 @@ class BaseTerminalController: NSWindowController,
 
     @IBAction func toggleCommandPalette(_ sender: Any?) {
         commandPaletteIsShowing.toggle()
+    }
+
+    @IBAction func toggleMarkdownPanel(_ sender: Any?) {
+        markdownPanelState.toggle()
+    }
+
+    @IBAction func toggleFileBrowser(_ sender: Any?) {
+        markdownPanelState.toggleFileBrowser()
+    }
+
+    @IBAction func toggleMarkdownPreview(_ sender: Any?) {
+        markdownPanelState.toggleMarkdown()
     }
 
     @IBAction func find(_ sender: Any) {
