@@ -21,7 +21,7 @@ extension SplitView {
         }
 
         private var visibleWidth: CGFloat? {
-            switch (direction) {
+            switch direction {
             case .horizontal:
                 return visibleSize
             case .vertical:
@@ -30,7 +30,7 @@ extension SplitView {
         }
 
         private var visibleHeight: CGFloat? {
-            switch (direction) {
+            switch direction {
             case .horizontal:
                 return nil
             case .vertical:
@@ -39,7 +39,7 @@ extension SplitView {
         }
 
         private var invisibleWidth: CGFloat? {
-            switch (direction) {
+            switch direction {
             case .horizontal:
                 return visibleSize + invisibleSize
             case .vertical:
@@ -48,7 +48,7 @@ extension SplitView {
         }
 
         private var invisibleHeight: CGFloat? {
-            switch (direction) {
+            switch direction {
             case .horizontal:
                 return nil
             case .vertical:
@@ -57,7 +57,7 @@ extension SplitView {
         }
 
         private var pointerStyle: BackportPointerStyle {
-            return switch (direction) {
+            return switch direction {
             case .horizontal: .resizeLeftRight
             case .vertical: .resizeUpDown
             }
@@ -90,8 +90,8 @@ extension SplitView {
                     return
                 }
 
-                if (isHovered) {
-                    switch (direction) {
+                if isHovered {
+                    switch direction {
                     case .horizontal:
                         NSCursor.resizeLeftRight.push()
                     case .vertical:

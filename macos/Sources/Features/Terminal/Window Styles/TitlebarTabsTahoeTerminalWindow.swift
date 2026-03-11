@@ -9,74 +9,6 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
     /// The view model for SwiftUI views
     private var viewModel = ViewModel()
 
-    /// Left sidebar toggle button
-    private lazy var fileBrowserButton: NSHostingView<ToolbarToggleButton> = {
-        let view = NSHostingView(rootView: ToolbarToggleButton(
-            viewModel: viewModel,
-            icon: "sidebar.left",
-            isActiveKeyPath: \.fileBrowserVisible,
-            accessibilityIdentifier: "fileBrowser.toggle",
-            action: { [weak self] in
-                self?.terminalController?.toggleFileBrowser(nil)
-            }
-        ))
-        view.setAccessibilityIdentifier("fileBrowser.toggle")
-        view.setAccessibilityRole(.button)
-        view.translatesAutoresizingMaskIntoConstraints = false
-        return view
-    }()
-
-    /// Right markdown toggle button
-    private lazy var markdownButton: NSHostingView<ToolbarToggleButton> = {
-        let view = NSHostingView(rootView: ToolbarToggleButton(
-            viewModel: viewModel,
-            icon: "doc.richtext",
-            isActiveKeyPath: \.markdownVisible,
-            accessibilityIdentifier: "markdown.toggle",
-            action: { [weak self] in
-                self?.terminalController?.toggleMarkdownPreview(nil)
-            }
-        ))
-        view.setAccessibilityIdentifier("markdown.toggle")
-        view.setAccessibilityRole(.button)
-        view.translatesAutoresizingMaskIntoConstraints = false
-        return view
-    }()
-
-    /// Custom SwiftUI tab bar that replaces the native NSTabBar
-    private lazy var customTabBarHostingView: NSHostingView<CustomTabBarView> = {
-        let view = NSHostingView(rootView: CustomTabBarView(
-            viewModel: viewModel,
-            onSelectTab: { [weak self] window in
-                window.makeKeyAndOrderFront(nil)
-            },
-            onCloseTab: { [weak self] window in
-                guard let controller = window.windowController as? TerminalController else { return }
-                controller.closeTab(nil)
-            },
-            onNewTab: { [weak self] in
-                self?.terminalController?.newTab(self)
-            },
-            onReorderTab: { [weak self] sourceWindow, targetIndex in
-                guard let self else { return }
-                guard let tabGroup = self.tabGroup else { return }
-                let windows = tabGroup.windows
-                guard let sourceIndex = windows.firstIndex(of: sourceWindow) else { return }
-                guard targetIndex != sourceIndex else { return }
-                guard targetIndex >= 0 && targetIndex < windows.count else { return }
-
-                let targetWindow = windows[targetIndex]
-                tabGroup.removeWindow(sourceWindow)
-                targetWindow.addTabbedWindow(sourceWindow, ordered: targetIndex > sourceIndex ? .above : .below)
-                DispatchQueue.main.async {
-                    sourceWindow.makeKey()
-                }
-            }
-        ))
-        view.translatesAutoresizingMaskIntoConstraints = false
-        return view
-    }()
-
     /// Titlebar tabs can't support the update accessory because of the way we layout
     /// the native tabs back into the menu bar.
     override var supportsUpdateAccessory: Bool { false }
@@ -101,7 +33,6 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.viewModel.title = self.title
-                self.refreshTabs()
             }
         }
     }
@@ -127,7 +58,6 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         // Check if we have a tab bar and set it up if we have to. See the comment
         // on this function to learn why we need to check this here.
         setupTabBar()
-        refreshTabs()
 
         viewModel.isMainWindow = true
     }
@@ -138,38 +68,12 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         viewModel.isMainWindow = false
     }
 
-    override func updatePanelState(fileBrowserVisible: Bool, markdownVisible: Bool) {
-        super.updatePanelState(fileBrowserVisible: fileBrowserVisible, markdownVisible: markdownVisible)
-        self.viewModel.fileBrowserVisible = fileBrowserVisible
-        self.viewModel.markdownVisible = markdownVisible
-    }
-
-    /// On our Tahoe titlebar tabs, we need to fix up right click, double-click, and drag events
-    /// because they don't work naturally due to our custom tab bar replacing the native one.
+    /// On our Tahoe titlebar tabs, we need to fix up right click events because they don't work
+    /// naturally due to whatever mess we made.
     override func sendEvent(_ event: NSEvent) {
         guard viewModel.hasTabBar else {
             super.sendEvent(event)
             return
-        }
-
-        // Handle left clicks in the titlebar for double-click-to-zoom and
-        // single-click-to-drag on empty tab bar space.
-        if event.type == .leftMouseDown, let titlebarView, titlebarView.isMousePoint(
-            titlebarView.convert(event.locationInWindow, from: nil),
-            in: titlebarView.bounds
-        ) {
-            if event.clickCount >= 2 {
-                // Double-click triggers the system's "Double-click a window's
-                // title bar to" preference (zoom/minimize).
-                performZoom(nil)
-                return
-            }
-
-            if isEmptyTitlebarSpace(at: event.locationInWindow) {
-                // Single click on empty space starts a window drag.
-                performDrag(with: event)
-                return
-            }
         }
 
         let isRightClick =
@@ -180,51 +84,23 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             super.sendEvent(event)
             return
         }
-        
+
         guard let tabBarView else {
             super.sendEvent(event)
             return
         }
-        
+
+        guard !tabTitleEditor.handleRightMouseDown(event) else {
+            return
+        }
+
         let locationInTabBar = tabBarView.convert(event.locationInWindow, from: nil)
         guard tabBarView.bounds.contains(locationInTabBar) else {
             super.sendEvent(event)
             return
         }
-        
+
         tabBarView.rightMouseDown(with: event)
-    }
-
-    /// Returns true if the given window-coordinate point is on empty titlebar space
-    /// (not on a tab, toggle button, or other interactive element).
-    private func isEmptyTitlebarSpace(at windowPoint: NSPoint) -> Bool {
-        // Check standard window buttons (traffic lights: close, minimize, zoom)
-        for buttonType: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
-            guard let button = standardWindowButton(buttonType) else { continue }
-            let locInButton = button.convert(windowPoint, from: nil)
-            if button.bounds.contains(locInButton) { return false }
-        }
-
-        // Check toggle buttons
-        let locInFile = fileBrowserButton.convert(windowPoint, from: nil)
-        if fileBrowserButton.bounds.contains(locInFile) { return false }
-
-        let locInMd = markdownButton.convert(windowPoint, from: nil)
-        if markdownButton.bounds.contains(locInMd) { return false }
-
-        // Check the custom tab bar hosting view. hitTest returns:
-        // - A child view (button, etc.) when hitting an interactive SwiftUI element
-        // - The hosting view itself when hitting empty space within it
-        // - nil when the point is outside the hosting view entirely
-        guard let superview = customTabBarHostingView.superview else { return true }
-        let pointInSuperview = superview.convert(windowPoint, from: nil)
-
-        if let hitView = customTabBarHostingView.hitTest(pointInSuperview) {
-            return hitView === customTabBarHostingView
-        }
-
-        // Point is in titlebar but outside the hosting view (e.g. near traffic lights)
-        return true
     }
 
     // This is called by macOS for native tabbing in order to add the tab bar. We hook into
@@ -235,7 +111,7 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             // After dragging a tab into a new window, `hasTabBar` needs to be
             // updated to properly review window title
             viewModel.hasTabBar = false
-            
+
             super.addTitlebarAccessoryViewController(childViewController)
             return
         }
@@ -244,7 +120,7 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         // system will also try to add tab bar to this window, so we want to reset observer,
         // to put tab bar where we want again
         tabBarObserver = nil
-        
+
         // Some setup needs to happen BEFORE it is added, such as layout. If
         // we don't do this before the call below, we'll trigger an AppKit
         // assertion.
@@ -315,78 +191,42 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
 
         // Find our clip view
         guard let clipView = tabBarView.firstSuperview(withClassName: "NSTitlebarAccessoryClipView") else { return }
+        guard let accessoryView = clipView.subviews[safe: 0] else { return }
         guard let toolbarView = titlebarView.firstDescendant(withClassName: "NSToolbarView") else { return }
 
-        // Hide the native tab bar visually but keep it in the hierarchy
-        // so macOS tab group internals (drag-to-new-window, etc.) still work.
-        tabBarView.alphaValue = 0
-        tabBarView.frame.size.height = 0
+        // Make sure tabBar's height won't be stretched
+        guard let newTabButton = titlebarView.firstDescendant(withClassName: "NSTabBarNewTabButton") else { return }
+        tabBarView.frame.size.height = newTabButton.frame.width
 
         // The container is the view that we'll constrain our tab bar within.
         let container = toolbarView
 
         // The padding for the tab bar. If we're showing window buttons then
         // we need to offset the window buttons.
-        let leftPadding: CGFloat = switch(self.derivedConfig.macosWindowButtons) {
+        let leftPadding: CGFloat = switch self.derivedConfig.macosWindowButtons {
         case .hidden: 0
         case .visible: 70
         }
 
-        // Add toggle buttons to the toolbar view
-        let buttonWidth: CGFloat = 32
-        let buttonPadding: CGFloat = 8
-
-        // Add custom tab bar view first (lowest in subview stack for hit testing)
-        if customTabBarHostingView.superview != container {
-            customTabBarHostingView.removeFromSuperview()
-            container.addSubview(customTabBarHostingView)
-        }
-
-        // Add toggle buttons AFTER tab bar so they're frontmost for hit testing.
-        // AppKit routes mouse events by subview order (last = frontmost), not zPosition.
-        if fileBrowserButton.superview != container {
-            fileBrowserButton.removeFromSuperview()
-            container.addSubview(fileBrowserButton)
-        }
-
-        if markdownButton.superview != container {
-            markdownButton.removeFromSuperview()
-            container.addSubview(markdownButton)
-        }
-
-        // Hide the native clip view (keep it but zero-sized so macOS internals work)
+        // Constrain the accessory clip view (the parent of the accessory view
+        // usually that clips the children) to the container view.
         clipView.translatesAutoresizingMaskIntoConstraints = false
+        accessoryView.translatesAutoresizingMaskIntoConstraints = false
 
-        // Setup all our constraints - leave room for toggle buttons on left and right
-        let tabBarLeftPadding = leftPadding + buttonWidth + buttonPadding
-        let tabBarRightPadding = buttonWidth + buttonPadding
-
+        // Setup all our constraints
         NSLayoutConstraint.activate([
-            // File browser button constraints (left side)
-            fileBrowserButton.leftAnchor.constraint(equalTo: container.leftAnchor, constant: leftPadding + buttonPadding),
-            fileBrowserButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            fileBrowserButton.widthAnchor.constraint(equalToConstant: 28),
-            fileBrowserButton.heightAnchor.constraint(equalToConstant: 22),
-
-            // Markdown button constraints (right side)
-            markdownButton.rightAnchor.constraint(equalTo: container.rightAnchor, constant: -buttonPadding),
-            markdownButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            markdownButton.widthAnchor.constraint(equalToConstant: 28),
-            markdownButton.heightAnchor.constraint(equalToConstant: 22),
-
-            // Custom tab bar constraints (between the buttons)
-            customTabBarHostingView.leftAnchor.constraint(equalTo: container.leftAnchor, constant: tabBarLeftPadding),
-            customTabBarHostingView.rightAnchor.constraint(equalTo: container.rightAnchor, constant: -tabBarRightPadding),
-            customTabBarHostingView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            customTabBarHostingView.heightAnchor.constraint(equalTo: container.heightAnchor),
-
-            // Zero-size the native clip view
-            clipView.widthAnchor.constraint(equalToConstant: 0),
-            clipView.heightAnchor.constraint(equalToConstant: 0),
+            clipView.leftAnchor.constraint(equalTo: container.leftAnchor, constant: leftPadding),
+            clipView.rightAnchor.constraint(equalTo: container.rightAnchor),
+            clipView.topAnchor.constraint(equalTo: container.topAnchor, constant: 2),
+            clipView.heightAnchor.constraint(equalTo: container.heightAnchor),
+            accessoryView.leftAnchor.constraint(equalTo: clipView.leftAnchor),
+            accessoryView.rightAnchor.constraint(equalTo: clipView.rightAnchor),
+            accessoryView.topAnchor.constraint(equalTo: clipView.topAnchor),
+            accessoryView.heightAnchor.constraint(equalTo: clipView.heightAnchor),
         ])
 
-        // Refresh tab state
-        refreshTabs()
+        clipView.needsLayout = true
+        accessoryView.needsLayout = true
 
         // Setup an observer for the NSTabBar frame. When system appearance changes or
         // other events occur, the tab bar can resize and clear our constraints. When this
@@ -406,32 +246,7 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             // Wait a tick to let the new tab bars appear and then set them up.
             DispatchQueue.main.async {
                 self.setupTabBar()
-                self.refreshTabs()
             }
-        }
-    }
-
-    /// Reads the current tab group state and updates the view model's tab list.
-    private func refreshTabs() {
-        guard let windows = tabbedWindows as? [TerminalWindow] else {
-            viewModel.tabs = []
-            return
-        }
-
-        viewModel.tabs = windows.enumerated().map { index, window in
-            let controller = window.terminalController
-            let hasRunning = controller?.surfaceTree.contains(where: { $0.needsConfirmQuit }) ?? false
-            let hasBell = controller?.focusedSurface?.bell ?? false
-            return ViewModel.TabInfo(
-                id: ObjectIdentifier(window),
-                title: window.title,
-                isSelected: window === self,
-                tabColor: window.tabColor,
-                keyEquivalent: window.keyEquivalent,
-                hasRunningProcess: hasRunning,
-                hasBell: hasBell,
-                window: window
-            )
         }
     }
 
@@ -440,13 +255,7 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         // triggers view updates.
         DispatchQueue.main.async {
             self.viewModel.hasTabBar = false
-            self.viewModel.tabs = []
         }
-
-        // Remove toggle buttons and custom tab bar from the toolbar
-        fileBrowserButton.removeFromSuperview()
-        markdownButton.removeFromSuperview()
-        customTabBarHostingView.removeFromSuperview()
 
         // Clear our observations
         self.tabBarObserver = nil
@@ -479,50 +288,6 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             item.isBordered = false
 
             return item
-        case .fileBrowserToggle:
-            let item = NSToolbarItem(itemIdentifier: .fileBrowserToggle)
-            let hostingView = NSHostingView(rootView: ToolbarToggleButton(
-                icon: "sidebar.left",
-                isActive: viewModel.fileBrowserVisible,
-                accessibilityIdentifier: "fileBrowser.toggle",
-                action: { [weak self] in
-                    self?.terminalController?.toggleFileBrowser(nil)
-                }
-            ))
-            hostingView.frame = NSRect(x: 0, y: 0, width: 28, height: 22)
-            hostingView.setAccessibilityIdentifier("fileBrowser.toggle")
-            hostingView.setAccessibilityRole(.button)
-            item.view = hostingView
-            item.view?.setAccessibilityIdentifier("fileBrowser.toggle")
-            item.view?.setAccessibilityRole(.button)
-            item.isBordered = false
-            item.visibilityPriority = .high
-            item.toolTip = "Toggle File Browser (⌘B)"
-            item.minSize = NSSize(width: 28, height: 22)
-            item.maxSize = NSSize(width: 28, height: 22)
-            return item
-        case .markdownToggle:
-            let item = NSToolbarItem(itemIdentifier: .markdownToggle)
-            let hostingView = NSHostingView(rootView: ToolbarToggleButton(
-                icon: "doc.richtext",
-                isActive: viewModel.markdownVisible,
-                accessibilityIdentifier: "markdown.toggle",
-                action: { [weak self] in
-                    self?.terminalController?.toggleMarkdownPreview(nil)
-                }
-            ))
-            hostingView.frame = NSRect(x: 0, y: 0, width: 28, height: 22)
-            hostingView.setAccessibilityIdentifier("markdown.toggle")
-            hostingView.setAccessibilityRole(.button)
-            item.view = hostingView
-            item.view?.setAccessibilityIdentifier("markdown.toggle")
-            item.view?.setAccessibilityRole(.button)
-            item.isBordered = false
-            item.visibilityPriority = .high
-            item.toolTip = "Toggle Panel (⇧⌘M)"
-            item.minSize = NSSize(width: 28, height: 22)
-            item.maxSize = NSSize(width: 28, height: 22)
-            return item
         default:
             return NSToolbarItem(itemIdentifier: itemIdentifier)
         }
@@ -535,32 +300,12 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         @Published var title: String = "👻 Ghostty"
         @Published var hasTabBar: Bool = false
         @Published var isMainWindow: Bool = true
-        @Published var fileBrowserVisible: Bool = false
-        @Published var markdownVisible: Bool = false
-
-        // Tab state for custom tab bar
-        @Published var tabs: [TabInfo] = []
-
-        struct TabInfo: Identifiable {
-            let id: ObjectIdentifier
-            let title: String
-            let isSelected: Bool
-            let tabColor: TerminalTabColor
-            let keyEquivalent: String?
-            let hasRunningProcess: Bool
-            let hasBell: Bool
-            weak var window: NSWindow?
-        }
     }
 }
 
 extension NSToolbarItem.Identifier {
     /// Displays the title of the window
     static let title = NSToolbarItem.Identifier("Title")
-    /// Toggle file browser panel
-    static let fileBrowserToggle = NSToolbarItem.Identifier("FileBrowserToggle")
-    /// Toggle markdown preview panel
-    static let markdownToggle = NSToolbarItem.Identifier("MarkdownToggle")
 }
 
 extension TitlebarTabsTahoeTerminalWindow {
@@ -586,7 +331,7 @@ extension TitlebarTabsTahoeTerminalWindow {
                 Color.clear.frame(width: 1, height: 1)
             }
         }
-        
+
         @ViewBuilder
         var titleText: some View {
             Text(title)
@@ -596,265 +341,6 @@ extension TitlebarTabsTahoeTerminalWindow {
                 .truncationMode(.tail)
                 .frame(maxWidth: .greatestFiniteMagnitude, alignment: .center)
                 .opacity(viewModel.hasTabBar ? 0 : 1) // hide when in fullscreen mode, where title bar will appear in the leading area under window buttons
-        }
-    }
-
-    /// A toggle button for the toolbar - supports both static and reactive modes
-    struct ToolbarToggleButton: View {
-        // For reactive mode with viewModel
-        @ObservedObject private var viewModel: ViewModel
-        private let isActiveKeyPath: KeyPath<ViewModel, Bool>?
-
-        // For static mode
-        private let staticIsActive: Bool?
-
-        let icon: String
-        let accessibilityIdentifier: String?
-        let action: () -> Void
-
-        @State private var isHovered = false
-
-        /// Reactive initializer - updates when viewModel changes
-        init(viewModel: ViewModel, icon: String, isActiveKeyPath: KeyPath<ViewModel, Bool>, accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
-            self.viewModel = viewModel
-            self.icon = icon
-            self.isActiveKeyPath = isActiveKeyPath
-            self.staticIsActive = nil
-            self.accessibilityIdentifier = accessibilityIdentifier
-            self.action = action
-        }
-
-        /// Static initializer - for toolbar items that don't need reactive updates
-        init(icon: String, isActive: Bool, accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
-            self.viewModel = ViewModel()
-            self.icon = icon
-            self.isActiveKeyPath = nil
-            self.staticIsActive = isActive
-            self.accessibilityIdentifier = accessibilityIdentifier
-            self.action = action
-        }
-
-        private var isActive: Bool {
-            if let keyPath = isActiveKeyPath {
-                return viewModel[keyPath: keyPath]
-            }
-            return staticIsActive ?? false
-        }
-
-        var body: some View {
-            Button(action: action) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(buttonColor)
-            }
-            .buttonStyle(.plain)
-            .modifier(AccessibilityIdentifierModifier(identifier: accessibilityIdentifier))
-            .frame(width: 28, height: 22)
-            .background(backgroundColor)
-            .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusMedium))
-            .onHover { isHovered = $0 }
-        }
-
-        private var buttonColor: Color {
-            if isActive {
-                return .accentColor
-            }
-            return isHovered ? .primary : .secondary
-        }
-
-        private var backgroundColor: Color {
-            if isActive {
-                return Color.accentColor.opacity(0.2)
-            }
-            return isHovered ? Color.primary.opacity(0.1) : .clear
-        }
-    }
-
-    // MARK: - Custom Tab Bar
-
-    /// A fully custom tab bar that replaces the native NSTabBar.
-    struct CustomTabBarView: View {
-        @ObservedObject var viewModel: ViewModel
-        let onSelectTab: (NSWindow) -> Void
-        let onCloseTab: (NSWindow) -> Void
-        let onNewTab: () -> Void
-        let onReorderTab: (_ sourceWindow: NSWindow, _ targetIndex: Int) -> Void
-
-        @State private var draggedTabId: ObjectIdentifier?
-        @State private var dragOffset: CGFloat = 0
-
-        var body: some View {
-            HStack(spacing: 2) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 2) {
-                        ForEach(viewModel.tabs) { tab in
-                            CustomTabItem(
-                                tab: tab,
-                                isDragging: draggedTabId == tab.id,
-                                onSelect: { if let w = tab.window { onSelectTab(w) } },
-                                onClose: { if let w = tab.window { onCloseTab(w) } },
-                                onDragChanged: { value in
-                                    draggedTabId = tab.id
-                                    dragOffset = value.translation.width
-                                },
-                                onDragEnded: { value in
-                                    let currentIndex = viewModel.tabs.firstIndex(where: { $0.id == tab.id }) ?? 0
-                                    let averageTabWidth: CGFloat = 120
-                                    let indexDelta = Int(round(value.translation.width / averageTabWidth))
-                                    let targetIndex = max(0, min(viewModel.tabs.count - 1, currentIndex + indexDelta))
-
-                                    if targetIndex != currentIndex, let window = tab.window {
-                                        onReorderTab(window, targetIndex)
-                                    }
-
-                                    withAnimation(.easeOut(duration: 0.2)) {
-                                        draggedTabId = nil
-                                        dragOffset = 0
-                                    }
-                                }
-                            )
-                            .zIndex(draggedTabId == tab.id ? 1 : 0)
-                            .offset(x: draggedTabId == tab.id ? dragOffset : 0)
-                        }
-                    }
-                    .padding(.horizontal, 4)
-                }
-                .mask(
-                    HStack(spacing: 0) {
-                        LinearGradient(
-                            stops: [.init(color: .clear, location: 0), .init(color: .black, location: 1)],
-                            startPoint: .leading, endPoint: .trailing
-                        ).frame(width: 8)
-                        Color.black
-                        LinearGradient(
-                            stops: [.init(color: .black, location: 0), .init(color: .clear, location: 1)],
-                            startPoint: .leading, endPoint: .trailing
-                        ).frame(width: 8)
-                    }
-                )
-
-                Button(action: onNewTab) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.secondary.opacity(0.6))
-                }
-                .buttonStyle(.plain)
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
-                .padding(.trailing, AdaptiveTheme.spacing4)
-            }
-        }
-    }
-
-    /// Individual tab pill with hover/select states, close button, key equivalents, and color indicator.
-    struct CustomTabItem: View {
-        let tab: ViewModel.TabInfo
-        let isDragging: Bool
-        let onSelect: () -> Void
-        let onClose: () -> Void
-        let onDragChanged: ((DragGesture.Value) -> Void)?
-        let onDragEnded: ((DragGesture.Value) -> Void)?
-
-        @State private var isHovered = false
-        @State private var pulseOpacity: Double = 0.4
-
-        init(tab: ViewModel.TabInfo, isDragging: Bool = false, onSelect: @escaping () -> Void, onClose: @escaping () -> Void, onDragChanged: ((DragGesture.Value) -> Void)? = nil, onDragEnded: ((DragGesture.Value) -> Void)? = nil) {
-            self.tab = tab
-            self.isDragging = isDragging
-            self.onSelect = onSelect
-            self.onClose = onClose
-            self.onDragChanged = onDragChanged
-            self.onDragEnded = onDragEnded
-        }
-
-        var body: some View {
-            HStack(spacing: AdaptiveTheme.spacing4) {
-                if tab.tabColor != .none, let displayColor = tab.tabColor.displayColor {
-                    Circle()
-                        .fill(Color(nsColor: displayColor))
-                        .frame(width: 7, height: 7)
-                }
-
-                if !tab.isSelected && tab.hasBell {
-                    Circle()
-                        .fill(Color.orange)
-                        .frame(width: 5, height: 5)
-                } else if !tab.isSelected && tab.hasRunningProcess {
-                    Circle()
-                        .fill(Color.accentColor.opacity(pulseOpacity))
-                        .frame(width: 5, height: 5)
-                        .onAppear {
-                            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                                pulseOpacity = 1.0
-                            }
-                        }
-                }
-
-                Text(tab.title)
-                    .font(.system(size: 11.5, weight: tab.isSelected ? .medium : .regular))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .foregroundColor(tab.isSelected ? .primary : .secondary)
-
-                // Key equivalent / close button share the same space
-                ZStack {
-                    CloseTabButton(action: onClose)
-                        .opacity(isHovered ? 1 : 0)
-
-                    if let key = tab.keyEquivalent, !key.isEmpty {
-                        Text(key)
-                            .font(.system(size: 9, weight: .medium, design: .rounded))
-                            .foregroundColor(.secondary.opacity(0.4))
-                            .opacity(!isHovered ? 1 : 0)
-                    }
-                }
-            }
-            .padding(.horizontal, AdaptiveTheme.spacing8)
-            .padding(.vertical, AdaptiveTheme.spacing4)
-            .background(tabBackground)
-            .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall))
-            .contentShape(Rectangle())
-            .onTapGesture { onSelect() }
-            .gesture(
-                DragGesture(minimumDistance: 8)
-                    .onChanged { value in onDragChanged?(value) }
-                    .onEnded { value in onDragEnded?(value) }
-            )
-            .onHover { isHovered = $0 }
-            .scaleEffect(isDragging ? 1.05 : 1)
-            .shadow(color: .black.opacity(isDragging ? 0.15 : 0), radius: isDragging ? 4 : 0)
-            .animation(.easeOut(duration: 0.15), value: isDragging)
-        }
-
-        @ViewBuilder
-        private var tabBackground: some View {
-            if tab.isSelected {
-                Color.primary.opacity(0.15)
-            } else if isHovered {
-                Color.primary.opacity(0.07)
-            } else {
-                Color.clear
-            }
-        }
-    }
-
-    struct CloseTabButton: View {
-        let action: () -> Void
-        @State private var isHovered = false
-
-        var body: some View {
-            Button(action: action) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundColor(isHovered ? .primary : .secondary.opacity(0.6))
-            }
-            .buttonStyle(.plain)
-            .frame(width: 14, height: 14)
-            .background(
-                Circle()
-                    .fill(Color.primary.opacity(isHovered ? 0.12 : 0))
-            )
-            .onHover { isHovered = $0 }
         }
     }
 }
