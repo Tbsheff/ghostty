@@ -189,18 +189,14 @@ struct TerminalWithPanelView<Content: View>: View {
     var config: Ghostty.Config? = nil
 
     /// Width of the file browser (persisted via AppStorage)
-    /// Clamped to prevent invalid persisted values from causing layout issues
-    @AppStorage("ghostty.fileBrowserWidth") private var fileBrowserWidth: Double = {
-        let stored = UserDefaults.standard.double(forKey: "ghostty.fileBrowserWidth")
-        return stored > 0 ? min(stored, 400) : 240
-    }()
+    @AppStorage("ghostty.fileBrowserWidth") private var fileBrowserWidth: Double = 240
 
     /// Width of the markdown panel (persisted via AppStorage)
-    /// Clamped to prevent invalid persisted values from causing layout issues
-    @AppStorage("ghostty.markdownWidth") private var markdownWidth: Double = {
-        let stored = UserDefaults.standard.double(forKey: "ghostty.markdownWidth")
-        return stored > 0 ? min(stored, 400) : 300
-    }()
+    @AppStorage("ghostty.markdownWidth") private var markdownWidth: Double = 300
+
+    /// Minimum/maximum panel widths
+    private let minPanelWidth: CGFloat = 160
+    private let maxPanelWidth: CGFloat = 600
 
     /// State for code execution safety
     @State private var pendingCode: String?
@@ -220,12 +216,12 @@ struct TerminalWithPanelView<Content: View>: View {
             leftVisible: $panelState.fileBrowserVisible,
             rightVisible: $panelState.markdownVisible,
             leftWidth: Binding(
-                get: { CGFloat(fileBrowserWidth) },
-                set: { fileBrowserWidth = Double($0) }
+                get: { max(minPanelWidth, min(maxPanelWidth, CGFloat(fileBrowserWidth))) },
+                set: { fileBrowserWidth = Double(max(minPanelWidth, min(maxPanelWidth, $0))) }
             ),
             rightWidth: Binding(
-                get: { CGFloat(markdownWidth) },
-                set: { markdownWidth = Double($0) }
+                get: { max(minPanelWidth, min(maxPanelWidth, CGFloat(markdownWidth))) },
+                set: { markdownWidth = Double(max(minPanelWidth, min(maxPanelWidth, $0))) }
             ),
             left: {
                 PanelContainer(identifier: "fileBrowser.panel") {

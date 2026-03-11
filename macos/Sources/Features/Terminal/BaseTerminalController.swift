@@ -187,6 +187,11 @@ class BaseTerminalController: NSWindowController,
             selector: #selector(ghosttyOpenMarkdownFile(_:)),
             name: .ghosttyOpenMarkdownFile,
             object: nil)
+        center.addObserver(
+            self,
+            selector: #selector(ghosttyInsertText(_:)),
+            name: .ghosttyInsertText,
+            object: nil)
 
         // Splits
         center.addObserver(
@@ -615,6 +620,14 @@ class BaseTerminalController: NSWindowController,
         DispatchQueue.main.async { [weak self] in
             guard let self, self.window?.isKeyWindow == true else { return }
             self.markdownPanelState.loadFile(at: path)
+        }
+    }
+
+    @objc private func ghosttyInsertText(_ notification: Notification) {
+        guard let text = notification.userInfo?["text"] as? String else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.window?.isKeyWindow == true else { return }
+            self.focusedSurface?.surfaceModel?.sendText(text)
         }
     }
 

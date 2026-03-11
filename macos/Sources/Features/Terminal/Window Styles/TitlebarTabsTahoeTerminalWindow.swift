@@ -603,14 +603,10 @@ extension TitlebarTabsTahoeTerminalWindow {
         }
     }
 
-    /// A toggle button for the toolbar - supports both static and reactive modes
+    /// A toggle button for the toolbar that reactively observes viewModel state.
     struct ToolbarToggleButton: View {
-        // For reactive mode with viewModel
         @ObservedObject private var viewModel: ViewModel
-        private let isActiveKeyPath: KeyPath<ViewModel, Bool>?
-
-        // For static mode
-        private let staticIsActive: Bool?
+        private let isActiveKeyPath: KeyPath<ViewModel, Bool>
 
         let icon: String
         let accessibilityIdentifier: String?
@@ -618,31 +614,16 @@ extension TitlebarTabsTahoeTerminalWindow {
 
         @State private var isHovered = false
 
-        /// Reactive initializer - updates when viewModel changes
         init(viewModel: ViewModel, icon: String, isActiveKeyPath: KeyPath<ViewModel, Bool>, accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
             self.viewModel = viewModel
             self.icon = icon
             self.isActiveKeyPath = isActiveKeyPath
-            self.staticIsActive = nil
-            self.accessibilityIdentifier = accessibilityIdentifier
-            self.action = action
-        }
-
-        /// Static initializer - for toolbar items that don't need reactive updates
-        init(icon: String, isActive: Bool, accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
-            self.viewModel = ViewModel()
-            self.icon = icon
-            self.isActiveKeyPath = nil
-            self.staticIsActive = isActive
             self.accessibilityIdentifier = accessibilityIdentifier
             self.action = action
         }
 
         private var isActive: Bool {
-            if let keyPath = isActiveKeyPath {
-                return viewModel[keyPath: keyPath]
-            }
-            return staticIsActive ?? false
+            viewModel[keyPath: isActiveKeyPath]
         }
 
         var body: some View {

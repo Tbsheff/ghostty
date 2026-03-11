@@ -1,6 +1,5 @@
 import SwiftUI
 import UniformTypeIdentifiers
-import Combine
 
 // MARK: - Keyboard Direction Enum
 
@@ -135,18 +134,18 @@ struct FileBrowserView: View {
                                         showHiddenFiles: showHiddenFiles
                                     )
                                     .id(index)
-                                    .onReceive(Just(selectedItemIndex)) { newIndex in
-                                        if newIndex >= 0 && newIndex < filteredItems.count {
-                                            withAnimation(.spring(response: AdaptiveTheme.springResponse, dampingFraction: AdaptiveTheme.springDamping)) {
-                                                proxy.scrollTo(newIndex, anchor: .center)
-                                            }
-                                        }
-                                    }
                                 }
                             }
                             .padding(.vertical, AdaptiveTheme.spacing6)
                         }
                         .scrollContentBackground(.hidden)
+                        .onChange(of: selectedItemIndex) { newIndex in
+                            if newIndex >= 0 && newIndex < filteredItems.count {
+                                withAnimation(.spring(response: AdaptiveTheme.springResponse, dampingFraction: AdaptiveTheme.springDamping)) {
+                                    proxy.scrollTo(newIndex, anchor: .center)
+                                }
+                            }
+                        }
                     }
                 }
                 .background(
@@ -201,9 +200,6 @@ struct FileBrowserView: View {
         }
         .onChange(of: recentFiles) { _ in
             saveRecentFilesToStorage()
-        }
-        .onChange(of: showQuickAccess) { _ in
-            // showQuickAccess is already persisted via @AppStorage
         }
         .backport.onKeyPress(.upArrow) { _ in handleKeyboardNavigation(direction: .up) }
         .backport.onKeyPress(.downArrow) { _ in handleKeyboardNavigation(direction: .down) }
@@ -539,6 +535,7 @@ struct FileTreeRow: View {
     @Environment(\.adaptiveTheme) private var theme
     @State private var isHovered = false
     @State private var children: [FileItem]?
+    @State private var loadGeneration: Int = 0
 
     private let indentWidth: CGFloat = 16
     private let maxIndentLevels: CGFloat = 6
@@ -634,7 +631,8 @@ struct FileTreeRow: View {
 
         if expandedDirs.contains(item.path) {
             expandedDirs.remove(item.path)
-            // Release memory when collapsed
+            // Increment generation to invalidate any in-flight loads
+            loadGeneration += 1
             children = nil
         } else {
             expandedDirs.insert(item.path)
@@ -648,16 +646,19 @@ struct FileTreeRow: View {
 
         let itemPath = item.path
         let showHidden = showHiddenFiles
+        loadGeneration += 1
+        let currentGeneration = loadGeneration
 
-        // Move file I/O to background queue
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let processedItems = try FileItemProcessor.processDirectory(at: itemPath, showHidden: showHidden)
                 DispatchQueue.main.async {
+                    guard self.loadGeneration == currentGeneration else { return }
                     self.children = processedItems
                 }
             } catch {
                 DispatchQueue.main.async {
+                    guard self.loadGeneration == currentGeneration else { return }
                     self.children = []
                 }
             }
