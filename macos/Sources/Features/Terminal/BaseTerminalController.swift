@@ -1210,6 +1210,7 @@ class BaseTerminalController: NSWindowController,
         // where reading "the other" value could return stale data
         markdownPanelState.$fileBrowserVisible
             .combineLatest(markdownPanelState.$markdownVisible)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self, weak terminalWindow] (fileBrowserVisible, markdownVisible) in
                 terminalWindow?.updatePanelState(
                     fileBrowserVisible: fileBrowserVisible,

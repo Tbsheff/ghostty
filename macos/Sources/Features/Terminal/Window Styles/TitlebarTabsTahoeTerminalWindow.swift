@@ -71,7 +71,7 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
 
                 let targetWindow = windows[targetIndex]
                 tabGroup.removeWindow(sourceWindow)
-                targetWindow.addTabbedWindow(sourceWindow, ordered: targetIndex > sourceIndex ? .above : .below)
+                targetWindow.addTabbedWindowSafely(sourceWindow, ordered: targetIndex > sourceIndex ? .above : .below)
                 DispatchQueue.main.async {
                     sourceWindow.makeKey()
                 }
