@@ -85,6 +85,14 @@ struct NativeSplitView<Left: View, Center: View, Right: View>: NSViewControllerR
         func splitViewDidResizeRight(to width: CGFloat) {
             parent.rightWidth = width
         }
+
+        func splitViewDidChangeLeftVisibility(_ visible: Bool) {
+            parent.leftVisible = visible
+        }
+
+        func splitViewDidChangeRightVisibility(_ visible: Bool) {
+            parent.rightVisible = visible
+        }
     }
 }
 
@@ -93,6 +101,8 @@ struct NativeSplitView<Left: View, Center: View, Right: View>: NSViewControllerR
 protocol NativeSplitViewControllerDelegate: AnyObject {
     func splitViewDidResizeLeft(to width: CGFloat)
     func splitViewDidResizeRight(to width: CGFloat)
+    func splitViewDidChangeLeftVisibility(_ visible: Bool)
+    func splitViewDidChangeRightVisibility(_ visible: Bool)
 }
 
 // MARK: - NSSplitViewController Subclass
@@ -335,7 +345,7 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
     // MARK: - Adaptive Panel Sizing
 
     private func clampedLeftWidth(totalWidth: CGFloat) -> CGFloat {
-        min(leftWidth, leftMaxWidth)
+        max(leftMinWidth, min(leftWidth, leftMaxWidth))
     }
 
     private func clampedRightWidth(totalWidth: CGFloat) -> CGFloat {
@@ -381,26 +391,30 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
         if shouldCollapseRight && isRightVisible {
             autoCollapsedRight = true
             isRightVisible = false
+            delegate?.splitViewDidChangeRightVisibility(false)
             needsUpdate = true
         } else if !shouldCollapseRight && autoCollapsedRight {
             // Restore right sidebar if width is sufficient and user prefers it visible
             isRightVisible = userPreferredRightVisible
             autoCollapsedRight = false
+            delegate?.splitViewDidChangeRightVisibility(isRightVisible)
             needsUpdate = true
         }
-        
+
         // Handle left sidebar auto-collapse
         if shouldCollapseLeft && isLeftVisible {
             autoCollapsedLeft = true
             isLeftVisible = false
+            delegate?.splitViewDidChangeLeftVisibility(false)
             needsUpdate = true
         } else if !shouldCollapseLeft && autoCollapsedLeft {
             // Restore left sidebar if width is sufficient and user prefers it visible
             isLeftVisible = userPreferredLeftVisible
             autoCollapsedLeft = false
+            delegate?.splitViewDidChangeLeftVisibility(isLeftVisible)
             needsUpdate = true
         }
-        
+
         if needsUpdate {
             applyVisibility(animated: false)
         }
@@ -572,8 +586,8 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
         // Hide divider preview after resize completes
         if isDraggingDivider {
             // Use a small delay to allow the final resize to complete
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                self.hideDividerPreview()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                self?.hideDividerPreview()
             }
         }
 

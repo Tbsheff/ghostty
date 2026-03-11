@@ -56,6 +56,7 @@ struct DotActivityIndicator: View {
     }
 
     private func startDotCycle() {
+        dotTimer?.invalidate()
         dotTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
             withAnimation(.easeInOut(duration: 0.2)) {
                 activeDot = (activeDot + 1) % 3

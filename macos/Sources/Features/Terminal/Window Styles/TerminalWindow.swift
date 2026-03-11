@@ -726,7 +726,7 @@ extension TerminalWindow {
         var body: some View {
             VStack {
                 Button(action: action) {
-                    Image(systemName: viewModel.fileBrowserVisible ? "sidebar.left" : "sidebar.left")
+                    Image(systemName: "sidebar.left")
                         .foregroundColor(buttonColor)
                 }
                 .buttonStyle(.plain)

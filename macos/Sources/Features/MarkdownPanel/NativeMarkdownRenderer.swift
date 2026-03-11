@@ -1031,10 +1031,12 @@ struct ImageBlockView: View {
         // Canonicalize path to resolve .. and symlinks
         resolvedPath = (resolvedPath as NSString).standardizingPath
 
-        // Path traversal protection: relative paths must stay within basePath
-        if let base = basePath {
+        // Path traversal protection: relative paths must stay within basePath.
+        // Absolute paths (url starts with "/" or "file://") are allowed through
+        // since the user explicitly wrote them in the markdown.
+        if let base = basePath, !url.hasPrefix("/"), !url.hasPrefix("file://") {
             let canonicalBase = (base as NSString).standardizingPath
-            guard resolvedPath.hasPrefix(canonicalBase) || resolvedPath.hasPrefix("/") && url.hasPrefix("/") else {
+            guard resolvedPath.hasPrefix(canonicalBase) else {
                 // Attempted path traversal (e.g., ../../../etc/passwd)
                 return nil
             }

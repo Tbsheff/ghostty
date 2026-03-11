@@ -680,11 +680,8 @@ struct FileItem: Identifiable, Hashable {
 
 /// Centralized file processing to avoid code duplication
 enum FileItemProcessor {
-    private static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mkdn"]
-
     static func isMarkdownFile(_ name: String) -> Bool {
-        let ext = (name as NSString).pathExtension.lowercased()
-        return markdownExtensions.contains(ext)
+        MarkdownFileDetector.isMarkdownFile(name)
     }
 
     /// Process directory contents into sorted FileItems (call from background queue)
