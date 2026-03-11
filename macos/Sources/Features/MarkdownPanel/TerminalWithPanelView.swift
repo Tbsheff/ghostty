@@ -116,6 +116,10 @@ class MarkdownPanelState: ObservableObject {
 
     /// Start watching a file for changes with debouncing
     private func startWatching(path: String) {
+        // Stop any existing watcher first — guards against races where two
+        // loadFile() calls dispatch background tasks that both reach here.
+        stopWatching()
+
         // Convert Swift String to C string for the open() system call
         fileDescriptor = path.withCString { cPath in
             Darwin.open(cPath, O_EVTONLY)
@@ -144,11 +148,13 @@ class MarkdownPanelState: ObservableObject {
 
             // Debounce rapid file changes (e.g., editors saving multiple times)
             self.debounceTimer?.invalidate()
-            self.debounceTimer = Timer.scheduledTimer(withTimeInterval: self.debounceInterval, repeats: false) { [weak self] _ in
+            let timer = Timer(timeInterval: self.debounceInterval, repeats: false) { [weak self] _ in
                 Task { @MainActor in
                     self?.refresh()
                 }
             }
+            RunLoop.main.add(timer, forMode: .common)
+            self.debounceTimer = timer
         }
 
         source.setCancelHandler {

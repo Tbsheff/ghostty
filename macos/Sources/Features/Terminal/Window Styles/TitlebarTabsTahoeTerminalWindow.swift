@@ -43,6 +43,10 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         return view
     }()
 
+    /// Active layout constraints for our custom views — deactivated before re-activation
+    /// to prevent duplicate constraint conflicts on setupTabBar() re-entry.
+    private var activeConstraints: [NSLayoutConstraint] = []
+
     /// Custom SwiftUI tab bar that replaces the native NSTabBar
     private lazy var customTabBarHostingView: NSHostingView<CustomTabBarView> = {
         let view = NSHostingView(rootView: CustomTabBarView(
@@ -325,11 +329,14 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         // Hide the native clip view (keep it but zero-sized so macOS internals work)
         clipView.translatesAutoresizingMaskIntoConstraints = false
 
+        // Deactivate old constraints before creating new ones to prevent duplicates on re-entry
+        NSLayoutConstraint.deactivate(activeConstraints)
+
         // Setup all our constraints - leave room for toggle buttons on left and right
         let tabBarLeftPadding = leftPadding + buttonWidth + buttonPadding
         let tabBarRightPadding = buttonWidth + buttonPadding
 
-        NSLayoutConstraint.activate([
+        activeConstraints = [
             // File browser button constraints (left side)
             fileBrowserButton.leftAnchor.constraint(equalTo: container.leftAnchor, constant: leftPadding + buttonPadding),
             fileBrowserButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
@@ -351,10 +358,10 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             // Zero-size the native clip view
             clipView.widthAnchor.constraint(equalToConstant: 0),
             clipView.heightAnchor.constraint(equalToConstant: 0),
-        ])
+        ]
+        NSLayoutConstraint.activate(activeConstraints)
 
         clipView.needsLayout = true
-        accessoryView.needsLayout = true
 
         // Setup an observer for the NSTabBar frame. When system appearance changes or
         // other events occur, the tab bar can resize and clear our constraints. When this
@@ -442,6 +449,13 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             self.viewModel.tabs = []
         }
 
+        // Deactivate constraints and remove custom views
+        NSLayoutConstraint.deactivate(activeConstraints)
+        activeConstraints = []
+        customTabBarHostingView.removeFromSuperview()
+        fileBrowserButton.removeFromSuperview()
+        markdownButton.removeFromSuperview()
+
         // Clear our observations
         self.tabBarObserver = nil
     }
@@ -476,8 +490,9 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         case .fileBrowserToggle:
             let item = NSToolbarItem(itemIdentifier: .fileBrowserToggle)
             let hostingView = NSHostingView(rootView: ToolbarToggleButton(
+                viewModel: viewModel,
                 icon: "sidebar.left",
-                isActive: viewModel.fileBrowserVisible,
+                isActiveKeyPath: \.fileBrowserVisible,
                 accessibilityIdentifier: "fileBrowser.toggle",
                 action: { [weak self] in
                     self?.terminalController?.toggleFileBrowser(nil)
@@ -487,8 +502,6 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             hostingView.setAccessibilityIdentifier("fileBrowser.toggle")
             hostingView.setAccessibilityRole(.button)
             item.view = hostingView
-            item.view?.setAccessibilityIdentifier("fileBrowser.toggle")
-            item.view?.setAccessibilityRole(.button)
             item.isBordered = false
             item.visibilityPriority = .high
             item.toolTip = "Toggle File Browser (⌘B)"
@@ -498,8 +511,9 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         case .markdownToggle:
             let item = NSToolbarItem(itemIdentifier: .markdownToggle)
             let hostingView = NSHostingView(rootView: ToolbarToggleButton(
+                viewModel: viewModel,
                 icon: "doc.richtext",
-                isActive: viewModel.markdownVisible,
+                isActiveKeyPath: \.markdownVisible,
                 accessibilityIdentifier: "markdown.toggle",
                 action: { [weak self] in
                     self?.terminalController?.toggleMarkdownPreview(nil)
@@ -509,8 +523,6 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             hostingView.setAccessibilityIdentifier("markdown.toggle")
             hostingView.setAccessibilityRole(.button)
             item.view = hostingView
-            item.view?.setAccessibilityIdentifier("markdown.toggle")
-            item.view?.setAccessibilityRole(.button)
             item.isBordered = false
             item.visibilityPriority = .high
             item.toolTip = "Toggle Panel (⇧⌘M)"

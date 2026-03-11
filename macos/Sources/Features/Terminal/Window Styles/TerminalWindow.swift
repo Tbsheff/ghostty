@@ -172,7 +172,7 @@ class TerminalWindow: NSWindow {
             // Create file browser and markdown toggle accessories only for non-tabs titlebar styles
             // In tabs mode, these would overlap with the integrated tab bar
             let titlebarStyle = config.macosTitlebarStyle
-            if titlebarStyle != "tabs" {
+            if titlebarStyle != .tabs {
                 fileBrowserAccessory.layoutAttribute = .right
                 fileBrowserAccessory.view = NSHostingView(rootView: FileBrowserToggleAccessoryView(
                     viewModel: viewModel,

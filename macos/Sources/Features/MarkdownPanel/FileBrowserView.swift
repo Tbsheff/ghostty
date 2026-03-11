@@ -21,7 +21,7 @@ struct FileBrowserView: View {
     @State private var errorMessage: String?
     @AppStorage("ghostty.fileBrowserShowHidden") private var showHiddenFiles: Bool = false
     @State private var loadGeneration: Int = 0  // Prevents race conditions
-    @AppStorage("ghostty.fileBrowserSearchText") private var searchText: String = ""
+    @State private var searchText: String = ""
     @State private var selectedItemIndex: Int = -1  // For keyboard navigation
     @State private var recentFiles: [String] = []  // Persisted across sessions via UserDefaults
     @AppStorage("ghostty.fileBrowserShowQuickAccess") private var showQuickAccess: Bool = true  // Persisted toggle state for unified accordion

@@ -168,6 +168,7 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
         pwdCancellable = surface.$pwd
             .compactMap { $0 }
             .filter { !$0.isEmpty }
+            .receive(on: DispatchQueue.main)
             .sink { [viewModel] pwd in
                 viewModel.markdownPanelState.browserRootPath = pwd
             }
