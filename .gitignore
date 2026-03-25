@@ -4,6 +4,7 @@
 *.log
 .DS_Store
 .vscode/
+.claude/mind.*
 .direnv/
 .envrc.local
 .flatpak-builder/
