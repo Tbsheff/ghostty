@@ -65,10 +65,19 @@ pub fn init(
         step.env_map = env_map;
         step.addArgs(&.{
             "xcodebuild",
-            "-target",
+            "-scheme",
             "Ghostty",
             "-configuration",
             xc_config,
+            "-destination",
+            "platform=macOS",
+            // Use -scheme (not -target) so SPM package resource
+            // bundles (e.g. GRDB_GRDB.bundle) are placed correctly.
+            // SYMROOT redirects build products to macos/build/.
+            b.fmt("SYMROOT={s}/build", .{b.pathFromRoot("macos")}),
+            // Set deployment target to 14.0 for workspace features
+            // that require @Observable (project default is 13.0).
+            "MACOSX_DEPLOYMENT_TARGET=14.0",
         });
 
         // If we have a specific architecture, we need to pass it
