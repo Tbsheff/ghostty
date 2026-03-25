@@ -70,7 +70,13 @@ pub fn init(
             "-configuration",
             xc_config,
             "-destination",
-            "platform=macOS",
+            // Merge arch into -destination so Xcode 26 does not
+            // error with "destination implies architecture, architecture
+            // must not also be specified" when -arch is used separately.
+            if (xc_arch) |arch|
+                b.fmt("platform=macOS,arch={s}", .{arch})
+            else
+                "platform=macOS",
             // Use -scheme (not -target) so SPM package resource
             // bundles (e.g. GRDB_GRDB.bundle) are placed correctly.
             // SYMROOT redirects build products to macos/build/.
@@ -79,10 +85,6 @@ pub fn init(
             // that require @Observable (project default is 13.0).
             "MACOSX_DEPLOYMENT_TARGET=14.0",
         });
-
-        // If we have a specific architecture, we need to pass it
-        // to xcodebuild.
-        if (xc_arch) |arch| step.addArgs(&.{ "-arch", arch });
 
         // We need the xcframework
         deps.xcframework.addStepDependencies(&step.step);
