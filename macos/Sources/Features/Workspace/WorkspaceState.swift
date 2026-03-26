@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Combine
 import GhosttyKit
 
@@ -45,6 +46,21 @@ final class WorktreeTab: Identifiable {
 
 // MARK: - WorktreeState
 
+/// Agent activity status for a worktree, shown as a colored dot in the sidebar.
+enum WorktreeStatus {
+    case idle
+    case activeAgent
+    case running
+
+    var dotColor: String {
+        switch self {
+        case .idle: return "blue"
+        case .activeAgent: return "green"
+        case .running: return "orange"
+        }
+    }
+}
+
 /// Represents a single git worktree in the sidebar.
 @Observable
 final class WorktreeState: Identifiable {
@@ -56,6 +72,26 @@ final class WorktreeState: Identifiable {
     var selectedTabIndex: Int
     var diffStats: DiffStats?
     var lastActiveAt: Date?
+    var ticketReference: String?
+    var displayName: String?
+
+    /// Computed status based on active agent tabs.
+    var status: WorktreeStatus {
+        let agentTabs = tabs.filter { $0.agentName != nil }
+        guard !agentTabs.isEmpty else { return .idle }
+        // If any agent tab exists, consider it active
+        return .activeAgent
+    }
+
+    /// The name shown in the sidebar (falls back to branch short name).
+    var resolvedDisplayName: String {
+        if let displayName, !displayName.isEmpty { return displayName }
+        // Use last path component of branch for display
+        if let lastSlash = branch.lastIndex(of: "/") {
+            return String(branch[branch.index(after: lastSlash)...])
+        }
+        return branch
+    }
 
     var currentTab: WorktreeTab? {
         guard selectedTabIndex >= 0, selectedTabIndex < tabs.count else { return nil }
@@ -70,7 +106,9 @@ final class WorktreeState: Identifiable {
         tabs: [WorktreeTab] = [],
         selectedTabIndex: Int = 0,
         diffStats: DiffStats? = nil,
-        lastActiveAt: Date? = nil
+        lastActiveAt: Date? = nil,
+        ticketReference: String? = nil,
+        displayName: String? = nil
     ) {
         self.id = id
         self.branch = branch
@@ -80,6 +118,8 @@ final class WorktreeState: Identifiable {
         self.selectedTabIndex = selectedTabIndex
         self.diffStats = diffStats
         self.lastActiveAt = lastActiveAt
+        self.ticketReference = ticketReference
+        self.displayName = displayName
     }
 }
 
@@ -93,6 +133,18 @@ final class RepoGroup: Identifiable {
     var repoPath: String
     var worktrees: [WorktreeState]
     var isExpanded: Bool
+
+    /// Stable avatar color derived from repo name hash.
+    var avatarColor: Color {
+        let colors: [Color] = [.blue, .purple, .orange, .green, .pink, .cyan, .yellow, .mint]
+        let hash = abs(name.hashValue)
+        return colors[hash % colors.count]
+    }
+
+    /// First letter of the repo name for avatar display.
+    var avatarLetter: String {
+        String(name.prefix(1)).uppercased()
+    }
 
     init(
         id: String = UUID().uuidString,
