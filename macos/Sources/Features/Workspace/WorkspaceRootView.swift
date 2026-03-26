@@ -143,12 +143,15 @@ private struct WorkspaceCenterView: View {
             // Content area — NSViewControllerRepresentable for Metal surface management
             // activeTabId is passed as a stored value so SwiftUI diffs it and
             // calls updateNSViewController when the active tab changes.
+            // frame(maxWidth/maxHeight) ensures the representable expands to fill
+            // remaining VStack space instead of collapsing to zero intrinsic size.
             WorkspaceContentView(
                 workspaceState: workspaceState,
                 ghostty: ghostty,
                 delegate: delegate,
                 activeTabId: workspaceState.currentTab?.id
             )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }

@@ -152,6 +152,11 @@ class WorkspaceContentViewController: NSViewController {
         ])
 
         activeTabId = tab.id
+
+        // Force immediate layout so the hosting view (and its Metal surface)
+        // gets a valid frame on the same run-loop tick.
+        view.needsLayout = true
+        view.layoutSubtreeIfNeeded()
     }
 
     private func removeActiveView() {

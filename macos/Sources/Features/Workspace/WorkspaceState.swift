@@ -211,8 +211,25 @@ final class WorkspaceState {
     // MARK: - Selection
 
     func selectWorktree(_ id: String) {
-        guard selectedWorktreeId != id else { return }
-        selectedWorktreeId = id
+        let isNewSelection = selectedWorktreeId != id
+        if isNewSelection {
+            selectedWorktreeId = id
+        }
+
+        // If the worktree has no tabs, request one to be created.
+        // This fires even on re-selection so clicking the same worktree
+        // retries tab creation if the previous attempt failed silently.
+        if let worktree = findWorktree(id: id), worktree.tabs.isEmpty {
+            NotificationCenter.default.post(
+                name: .workspaceWorktreeNeedsTab,
+                object: nil,
+                userInfo: [
+                    "worktreeId": id,
+                    "workingDirectory": worktree.worktreePath,
+                ]
+            )
+        }
+
         activeTabDidChange.send(currentTab)
     }
 
@@ -265,6 +282,35 @@ final class WorkspaceState {
 
         // Keep the same tab selected
         worktree.selectedTabIndex = destinationIndex
+    }
+
+    // MARK: - Repo Management
+
+    func removeRepo(_ repo: RepoGroup) {
+        repos.removeAll { $0.id == repo.id }
+        // If the selected worktree belonged to this repo, clear selection
+        if let selectedId = selectedWorktreeId,
+           repo.worktrees.contains(where: { $0.id == selectedId }) {
+            selectedWorktreeId = nil
+            activeTabDidChange.send(nil)
+        }
+    }
+
+    func removeWorktree(_ worktreeId: String, from repoId: String) {
+        guard let repo = repos.first(where: { $0.id == repoId }) else { return }
+        repo.worktrees.removeAll { $0.id == worktreeId }
+
+        // If we removed the selected worktree, select another
+        if selectedWorktreeId == worktreeId {
+            if let next = repo.worktrees.first {
+                selectWorktree(next.id)
+            } else if let anyWorktree = allWorktrees.first {
+                selectWorktree(anyWorktree.id)
+            } else {
+                selectedWorktreeId = nil
+                activeTabDidChange.send(nil)
+            }
+        }
     }
 
     // MARK: - Sidebar Persistence
