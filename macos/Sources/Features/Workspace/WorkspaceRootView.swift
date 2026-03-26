@@ -20,6 +20,12 @@ struct WorkspaceRootView: View {
     /// Git panel width (persisted)
     @AppStorage("ghostty.gitPanelWidth") private var gitPanelWidth: Double = 320
 
+    /// Sheet state lives here (root level) so `.sheet` modifiers are on a view
+    /// that is always in the hierarchy. Presenting from the sidebar's
+    /// NSHostingView fails when the sidebar is collapsed to zero width.
+    @State private var showImportSheet = false
+    @State private var createWorktreeRepo: RepoGroup?
+
     /// Panel width constraints
     private let minSidebarWidth: CGFloat = 180
     private let maxSidebarWidth: CGFloat = 350
@@ -52,8 +58,12 @@ struct WorkspaceRootView: View {
                 ),
                 autosaveName: "GhosttyWorkspaceSplit",
                 left: {
-                    WorkspaceSidebarView(workspaceState: workspaceState)
-                        .accessibilityIdentifier("sidebar-area")
+                    WorkspaceSidebarView(
+                        workspaceState: workspaceState,
+                        showImportSheet: $showImportSheet,
+                        createWorktreeRepo: $createWorktreeRepo
+                    )
+                    .accessibilityIdentifier("sidebar-area")
                 },
                 center: {
                     // Tab bar + active tab content
@@ -76,6 +86,15 @@ struct WorkspaceRootView: View {
             )
             .frame(maxWidth: .greatestFiniteMagnitude, maxHeight: .greatestFiniteMagnitude)
             .accessibilityIdentifier("workspace-root")
+            .sheet(isPresented: $showImportSheet) {
+                ProjectImportView(workspaceState: workspaceState)
+            }
+            .sheet(item: $createWorktreeRepo) { repo in
+                CreateWorktreeSheet(
+                    workspaceState: workspaceState,
+                    repo: repo
+                )
+            }
         }
     }
 }
@@ -164,31 +183,33 @@ struct WorkspaceSidebarPlaceholder: View {
                     ForEach(workspaceState.repos) { repo in
                         Section(repo.name) {
                             ForEach(repo.worktrees) { wt in
-                                HStack {
-                                    Image(systemName: "arrow.branch")
-                                        .font(.system(size: 10))
-                                    Text(wt.branch)
-                                        .font(.system(size: 12))
-                                    Spacer()
-                                    if let stats = wt.diffStats {
-                                        Text("+\(stats.added)")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.green)
-                                        Text("-\(stats.removed)")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.red)
-                                    }
-                                }
-                                .padding(.vertical, 2)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
+                                Button {
                                     workspaceState.selectWorktree(wt.id)
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "arrow.branch")
+                                            .font(.system(size: 10))
+                                        Text(wt.branch)
+                                            .font(.system(size: 12))
+                                        Spacer()
+                                        if let stats = wt.diffStats {
+                                            Text("+\(stats.added)")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.green)
+                                            Text("-\(stats.removed)")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.red)
+                                        }
+                                    }
+                                    .padding(.vertical, 2)
+                                    .contentShape(Rectangle())
+                                    .background(
+                                        workspaceState.selectedWorktreeId == wt.id
+                                            ? Color.accentColor.opacity(0.15)
+                                            : Color.clear
+                                    )
                                 }
-                                .background(
-                                    workspaceState.selectedWorktreeId == wt.id
-                                        ? Color.accentColor.opacity(0.15)
-                                        : Color.clear
-                                )
+                                .buttonStyle(.plain)
                             }
                         }
                     }

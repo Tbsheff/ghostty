@@ -8,9 +8,14 @@ import GhosttyKit
 struct WorkspaceSidebarView: View {
     let workspaceState: WorkspaceState
 
+    /// Sheet state is exposed as bindings so the parent (WorkspaceRootView) can
+    /// attach `.sheet` modifiers on a view that is always in the hierarchy.
+    /// Presenting sheets from an NSHostingView that has been collapsed to zero
+    /// width (NativeSplitView hides the sidebar) fails silently on macOS.
+    @Binding var showImportSheet: Bool
+    @Binding var createWorktreeRepo: RepoGroup?
+
     @State private var searchText = ""
-    @State private var showImportSheet = false
-    @State private var createWorktreeRepo: RepoGroup?
 
     @Environment(\.adaptiveTheme) private var theme
 
@@ -57,15 +62,6 @@ struct WorkspaceSidebarView: View {
             }
         }
         .accessibilityIdentifier("workspace-sidebar")
-        .sheet(isPresented: $showImportSheet) {
-            ProjectImportView(workspaceState: workspaceState)
-        }
-        .sheet(item: $createWorktreeRepo) { repo in
-            CreateWorktreeSheet(
-                workspaceState: workspaceState,
-                repo: repo
-            )
-        }
     }
 
     // MARK: - Navigation Header
@@ -351,54 +347,62 @@ private struct RepoGroupHeader: View {
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: onToggle) {
-            HStack(spacing: AdaptiveTheme.spacing6) {
-                // Colored letter avatar
-                Text(repo.avatarLetter)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                    .frame(width: 20, height: 20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(repo.avatarColor)
-                    )
-
-                // Repo name + worktree count
-                Text("\(repo.name)")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(theme.textPrimaryC)
-                    .lineLimit(1)
-
-                Text("(\(repo.worktrees.count))")
-                    .font(.system(size: 11, weight: .regular))
-                    .foregroundColor(theme.textMutedC)
-
-                Spacer()
-
-                // Add worktree button
-                Button(action: onAddWorktree) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(theme.textMutedC)
+        HStack(spacing: 0) {
+            // Toggle area: avatar + name + count — expands to fill available space
+            Button(action: onToggle) {
+                HStack(spacing: AdaptiveTheme.spacing6) {
+                    // Colored letter avatar
+                    Text(repo.avatarLetter)
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
                         .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Add worktree to \(repo.name)")
+                        .background(
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(repo.avatarColor)
+                        )
 
-                // Chevron
+                    // Repo name + worktree count
+                    Text("\(repo.name)")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textPrimaryC)
+                        .lineLimit(1)
+
+                    Text("(\(repo.worktrees.count))")
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundColor(theme.textMutedC)
+
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            // Add worktree button — separate hit target
+            Button(action: onAddWorktree) {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(theme.textMutedC)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add worktree to \(repo.name)")
+
+            // Chevron — separate hit target for toggle
+            Button(action: onToggle) {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(theme.textMutedC)
                     .rotationEffect(.degrees(repo.isExpanded ? 90 : 0))
-                    .accessibilityLabel(repo.isExpanded ? "Collapse" : "Expand")
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
             }
-            .padding(.horizontal, AdaptiveTheme.spacing10)
-            .padding(.vertical, AdaptiveTheme.spacing6)
-            .background(isHovered ? theme.surfaceHoverC : Color.clear)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel(repo.isExpanded ? "Collapse" : "Expand")
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, AdaptiveTheme.spacing10)
+        .padding(.vertical, AdaptiveTheme.spacing6)
+        .background(isHovered ? theme.surfaceHoverC : Color.clear)
         .onHover { isHovered = $0 }
         .accessibilityIdentifier("repo-group-\(repo.name)")
         .accessibilityLabel("\(repo.name), \(repo.worktrees.count) worktrees")
