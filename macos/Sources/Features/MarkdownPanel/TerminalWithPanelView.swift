@@ -407,6 +407,7 @@ struct PanelContainer<Content: View>: View {
         .overlay(
             RoundedRectangle(cornerRadius: AdaptiveTheme.radiusLarge, style: .continuous)
                 .stroke(theme.borderSubtleC, lineWidth: 1)
+                .allowsHitTesting(false)
         )
         .padding(AdaptiveTheme.spacing8)
         .modifier(OptionalAccessibilityIdentifier(identifier: identifier))
