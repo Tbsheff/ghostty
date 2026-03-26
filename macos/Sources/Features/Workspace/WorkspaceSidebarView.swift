@@ -541,5 +541,4 @@ private struct SupersetWorktreeRow: View {
 extension Notification.Name {
     static let workspaceLaunchAgent = Notification.Name("com.ghostty.workspace.launchAgent")
     static let workspaceDeleteWorktree = Notification.Name("com.ghostty.workspace.deleteWorktree")
-    static let workspaceWorktreeNeedsTab = Notification.Name("com.ghostty.workspace.worktreeNeedsTab")
 }

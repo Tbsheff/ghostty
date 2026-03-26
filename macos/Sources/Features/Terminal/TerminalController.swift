@@ -88,6 +88,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // Setup workspace: create default worktree + tab with the initial surfaceTree
         setupInitialWorkspaceTab()
         setupWorkspaceSurfaceTreeSync()
+        setupWorkspaceTabFactory()
 
         // Setup our notifications for behaviors
         let center = NotificationCenter.default
@@ -150,12 +151,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             name: .workspaceNewTab,
             object: nil
         )
-        center.addObserver(
-            self,
-            selector: #selector(onWorkspaceWorktreeNeedsTab),
-            name: .workspaceWorktreeNeedsTab,
-            object: nil
-        )
+        // Tab creation for empty worktrees is handled by WorkspaceState.tabFactory
     }
 
     required init?(coder: NSCoder) {
@@ -1638,35 +1634,37 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         createWorkspaceTab()
     }
 
-    @objc private func onWorkspaceWorktreeNeedsTab(_ notification: Notification) {
-        guard let worktreeId = notification.userInfo?["worktreeId"] as? String else { return }
-        guard let worktree = workspaceState.allWorktrees.first(where: { $0.id == worktreeId }) else { return }
-        guard worktree.tabs.isEmpty else { return } // Already has tabs
+    /// Configures the tab factory closure on WorkspaceState.
+    /// This closure creates a new terminal surface and wraps it in a WorktreeTab.
+    /// Called synchronously from selectWorktree when a worktree has no tabs,
+    /// avoiding the fragile NotificationCenter approach that fails when the
+    /// observer is deallocated.
+    private func setupWorkspaceTabFactory() {
+        workspaceState.tabFactory = { [weak self] (worktreeId: String, workingDirectory: String) -> WorktreeTab? in
+            guard let self, let ghostty_app = self.ghostty.app else { return nil }
 
-        // Create a terminal tab for this worktree
-        guard let ghostty_app = ghostty.app else { return }
-
-        var config = Ghostty.SurfaceConfiguration()
-        if !worktree.worktreePath.isEmpty {
-            config.workingDirectory = worktree.worktreePath
-        }
-
-        let surface = Ghostty.SurfaceView(ghostty_app, baseConfig: config)
-        let tree = SplitTree<Ghostty.SurfaceView>(view: surface)
-        let tab = WorktreeTab(surfaceTree: tree, focusedSurface: surface)
-
-        workspaceState.addTab(tab, to: worktreeId)
-
-        // If this is the currently selected worktree, sync to the controller
-        if workspaceState.selectedWorktreeId == worktreeId {
-            isSyncingSurfaceTree = true
-            surfaceTree = tree
-            focusedSurface = surface
-            isSyncingSurfaceTree = false
-
-            DispatchQueue.main.async {
-                Ghostty.moveFocus(to: surface)
+            var config = Ghostty.SurfaceConfiguration()
+            if !workingDirectory.isEmpty {
+                config.workingDirectory = workingDirectory
             }
+
+            let surface = Ghostty.SurfaceView(ghostty_app, baseConfig: config)
+            let tree = SplitTree<Ghostty.SurfaceView>(view: surface)
+            let tab = WorktreeTab(surfaceTree: tree, focusedSurface: surface)
+
+            // Sync the new tab's surfaceTree to the controller if this is the selected worktree
+            if self.workspaceState.selectedWorktreeId == worktreeId {
+                self.isSyncingSurfaceTree = true
+                self.surfaceTree = tree
+                self.focusedSurface = surface
+                self.isSyncingSurfaceTree = false
+
+                DispatchQueue.main.async {
+                    Ghostty.moveFocus(to: surface)
+                }
+            }
+
+            return tab
         }
     }
 

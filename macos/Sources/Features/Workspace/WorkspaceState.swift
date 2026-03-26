@@ -175,6 +175,12 @@ final class WorkspaceState {
     var sidebarVisible: Bool
     var gitPanelVisible: Bool
 
+    /// Factory closure for creating a new terminal tab for a worktree.
+    /// Set by TerminalController during init. This replaces the fragile
+    /// notification-based approach which fails when the observer is deallocated.
+    /// Returns nil if the tab could not be created (e.g. ghostty.app unavailable).
+    var tabFactory: ((_ worktreeId: String, _ workingDirectory: String) -> WorktreeTab?)?
+
     /// Publisher that fires when the active tab changes (for Combine subscriptions).
     let activeTabDidChange = PassthroughSubject<WorktreeTab?, Never>()
 
@@ -216,18 +222,14 @@ final class WorkspaceState {
             selectedWorktreeId = id
         }
 
-        // If the worktree has no tabs, request one to be created.
+        // If the worktree has no tabs, create one via the factory.
         // This fires even on re-selection so clicking the same worktree
         // retries tab creation if the previous attempt failed silently.
         if let worktree = findWorktree(id: id), worktree.tabs.isEmpty {
-            NotificationCenter.default.post(
-                name: .workspaceWorktreeNeedsTab,
-                object: nil,
-                userInfo: [
-                    "worktreeId": id,
-                    "workingDirectory": worktree.worktreePath,
-                ]
-            )
+            if let tab = tabFactory?(id, worktree.worktreePath) {
+                worktree.tabs.append(tab)
+                worktree.selectedTabIndex = 0
+            }
         }
 
         activeTabDidChange.send(currentTab)

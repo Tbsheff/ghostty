@@ -330,7 +330,7 @@ struct ProjectImportView: View {
         workspaceState.repos.append(repo)
 
         // Select the main branch worktree — selectWorktree() automatically
-        // posts .workspaceWorktreeNeedsTab when the worktree has no tabs.
+        // creates a terminal tab via tabFactory when the worktree has no tabs.
         let targetWorktree = worktreeStates.first(where: { $0.isMainBranch }) ?? worktreeStates.first
         if let targetWorktree {
             workspaceState.selectWorktree(targetWorktree.id)

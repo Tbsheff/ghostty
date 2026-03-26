@@ -338,8 +338,8 @@ struct CreateWorktreeSheet: View {
                         isMainBranch: false
                     )
                     repo.worktrees.append(worktreeState)
-                    // selectWorktree() automatically posts .workspaceWorktreeNeedsTab
-                    // when the worktree has no tabs.
+                    // selectWorktree() automatically creates a terminal tab
+                    // via tabFactory when the worktree has no tabs.
                     workspaceState.selectWorktree(worktreeState.id)
 
                     isCreating = false
