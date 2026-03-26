@@ -109,6 +109,7 @@ private struct AgentRow: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .accessibilityLabel("Launch \(agent.name)")
             }
         }
         .padding(.horizontal, 8)
@@ -117,5 +118,7 @@ private struct AgentRow: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(Color.primary.opacity(0.00001)) // Hit target
         )
+        .accessibilityIdentifier("agent-\(agent.name)")
+        .accessibilityLabel(agent.name)
     }
 }

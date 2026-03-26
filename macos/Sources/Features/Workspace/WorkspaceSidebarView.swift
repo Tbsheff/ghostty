@@ -30,14 +30,20 @@ struct WorkspaceSidebarView: View {
 
                 SidebarDivider()
 
-                // Repo list
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 0, pinnedViews: []) {
-                        ForEach(filteredRepos) { repo in
-                            repoSection(repo)
+                // Repo list or empty state
+                if filteredRepos.isEmpty {
+                    Spacer()
+                    emptyState
+                    Spacer()
+                } else {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(spacing: 0, pinnedViews: []) {
+                            ForEach(filteredRepos) { repo in
+                                repoSection(repo)
+                            }
                         }
+                        .padding(.bottom, AdaptiveTheme.spacing8)
                     }
-                    .padding(.bottom, AdaptiveTheme.spacing8)
                 }
 
                 Spacer(minLength: 0)
@@ -50,6 +56,7 @@ struct WorkspaceSidebarView: View {
                     .padding(.vertical, AdaptiveTheme.spacing8)
             }
         }
+        .accessibilityIdentifier("workspace-sidebar")
         .sheet(isPresented: $showImportSheet) {
             ProjectImportView(workspaceState: workspaceState)
         }
@@ -63,24 +70,52 @@ struct WorkspaceSidebarView: View {
 
     // MARK: - Navigation Header
 
-    private var sidebarNavigationHeader: some View {
-        VStack(alignment: .leading, spacing: AdaptiveTheme.spacing4) {
-            Text("Workspaces")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(theme.textPrimaryC)
+    @State private var selectedNav: SidebarNav = .workspaces
 
-            Text("Tasks")
-                .font(.system(size: 12, weight: .regular))
-                .foregroundColor(theme.textSecondaryC)
+    private enum SidebarNav {
+        case workspaces, tasks
+    }
+
+    private var sidebarNavigationHeader: some View {
+        HStack(spacing: AdaptiveTheme.spacing4) {
+            navButton("Workspaces", nav: .workspaces)
+            navButton("Tasks", nav: .tasks)
+            Spacer()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func navButton(_ title: String, nav: SidebarNav) -> some View {
+        Button {
+            selectedNav = nav
+        } label: {
+            Text(title)
+                .font(.system(size: 12, weight: selectedNav == nav ? .bold : .regular))
+                .foregroundColor(selectedNav == nav ? theme.textPrimaryC : theme.textMutedC)
+                .padding(.horizontal, AdaptiveTheme.spacing6)
+                .padding(.vertical, AdaptiveTheme.spacing4)
+                .background(
+                    selectedNav == nav
+                        ? theme.surfaceHoverC.opacity(0.6)
+                        : Color.clear
+                )
+                .clipShape(RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityIdentifier("nav-\(title.lowercased())")
     }
 
     // MARK: - New Workspace Button
 
+    @State private var newWorkspaceHovered = false
+
     private var newWorkspaceButton: some View {
         Button {
-            // TODO: Wire up new workspace creation
+            if let firstRepo = displayRepos.first(where: { !$0.repoPath.isEmpty }) {
+                createWorktreeRepo = firstRepo
+            } else {
+                showImportSheet = true
+            }
         } label: {
             HStack(spacing: AdaptiveTheme.spacing6) {
                 Image(systemName: "plus")
@@ -88,23 +123,80 @@ struct WorkspaceSidebarView: View {
                 Text("New Workspace")
                     .font(.system(size: 12, weight: .medium))
             }
-            .foregroundColor(theme.textSecondaryC)
+            .foregroundColor(newWorkspaceHovered ? theme.textPrimaryC : theme.textSecondaryC)
             .frame(maxWidth: .infinity)
             .padding(.vertical, AdaptiveTheme.spacing6)
             .background(
                 RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall, style: .continuous)
-                    .strokeBorder(theme.borderSubtleC, lineWidth: 1)
+                    .strokeBorder(
+                        newWorkspaceHovered ? theme.textMutedC : theme.borderSubtleC,
+                        lineWidth: 1
+                    )
+            )
+            .background(
+                RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall, style: .continuous)
+                    .fill(newWorkspaceHovered ? theme.surfaceHoverC.opacity(0.4) : Color.clear)
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { newWorkspaceHovered = $0 }
+        .animation(.linear(duration: AdaptiveTheme.animationFast), value: newWorkspaceHovered)
+        .accessibilityLabel("New Workspace")
+        .accessibilityIdentifier("btn-new-workspace")
+    }
+
+    // MARK: - Empty State
+
+    private var emptyState: some View {
+        VStack(spacing: AdaptiveTheme.spacing10) {
+            Image(systemName: "folder.badge.plus")
+                .font(.system(size: 28, weight: .light))
+                .foregroundColor(theme.textMutedC)
+
+            VStack(spacing: AdaptiveTheme.spacing4) {
+                Text("No repositories")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(theme.textSecondaryC)
+
+                Text("Import a git repository to manage\nworktrees and agent sessions")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.textMutedC)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+            }
+
+            Button {
+                showImportSheet = true
+            } label: {
+                Text("Import Repository")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.accentColor)
+                    .padding(.horizontal, AdaptiveTheme.spacing10)
+                    .padding(.vertical, AdaptiveTheme.spacing6)
+                    .background(
+                        RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.1))
+                    )
+            }
+            .buttonStyle(.plain)
+            .padding(.top, AdaptiveTheme.spacing4)
+        }
+        .padding(.horizontal, AdaptiveTheme.spacing16)
     }
 
     // MARK: - Filtered Data
 
+    /// Repos to display. Hides the default "Terminal" placeholder repo once real repos exist.
+    private var displayRepos: [RepoGroup] {
+        let realRepos = workspaceState.repos.filter { !$0.repoPath.isEmpty }
+        // If we have real repos, only show those; otherwise show all (including default)
+        return realRepos.isEmpty ? workspaceState.repos : realRepos
+    }
+
     private var filteredRepos: [RepoGroup] {
-        guard !searchText.isEmpty else { return workspaceState.repos }
-        return workspaceState.repos.compactMap { repo in
+        guard !searchText.isEmpty else { return displayRepos }
+        return displayRepos.compactMap { repo in
             let matchingWorktrees = repo.worktrees.filter {
                 $0.branch.localizedCaseInsensitiveContains(searchText)
             }
@@ -145,6 +237,10 @@ struct WorkspaceSidebarView: View {
                 .contextMenu {
                     worktreeContextMenu(worktree: worktree, repo: repo)
                 }
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .opacity
+                ))
             }
         }
     }
@@ -186,6 +282,8 @@ struct WorkspaceSidebarView: View {
 
     // MARK: - Add Repository Button
 
+    @State private var addRepoHovered = false
+
     private var addRepositoryButton: some View {
         Button {
             showImportSheet = true
@@ -197,12 +295,20 @@ struct WorkspaceSidebarView: View {
                     .font(.system(size: 12, weight: .medium))
                 Spacer()
             }
-            .foregroundColor(theme.textMutedC)
-            .padding(.vertical, AdaptiveTheme.spacing4)
-            .padding(.horizontal, AdaptiveTheme.spacing4)
+            .foregroundColor(addRepoHovered ? theme.textSecondaryC : theme.textMutedC)
+            .padding(.vertical, AdaptiveTheme.spacing6)
+            .padding(.horizontal, AdaptiveTheme.spacing6)
+            .background(
+                RoundedRectangle(cornerRadius: AdaptiveTheme.radiusSmall, style: .continuous)
+                    .fill(addRepoHovered ? theme.surfaceHoverC : Color.clear)
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { addRepoHovered = $0 }
+        .animation(.linear(duration: AdaptiveTheme.animationFast), value: addRepoHovered)
+        .accessibilityLabel("Add repository")
+        .accessibilityIdentifier("btn-add-repository")
     }
 
     // MARK: - Actions
@@ -276,12 +382,14 @@ private struct RepoGroupHeader: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Add worktree to \(repo.name)")
 
                 // Chevron
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(theme.textMutedC)
                     .rotationEffect(.degrees(repo.isExpanded ? 90 : 0))
+                    .accessibilityLabel(repo.isExpanded ? "Collapse" : "Expand")
             }
             .padding(.horizontal, AdaptiveTheme.spacing10)
             .padding(.vertical, AdaptiveTheme.spacing6)
@@ -290,6 +398,8 @@ private struct RepoGroupHeader: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+        .accessibilityIdentifier("repo-group-\(repo.name)")
+        .accessibilityLabel("\(repo.name), \(repo.worktrees.count) worktrees")
     }
 }
 
@@ -367,6 +477,9 @@ private struct SupersetWorktreeRow: View {
         .onHover { isHovered = $0 }
         .animation(.linear(duration: AdaptiveTheme.animationFast), value: isHovered)
         .animation(.linear(duration: AdaptiveTheme.animationFast), value: isSelected)
+        .accessibilityIdentifier("worktree-\(worktree.branch)")
+        .accessibilityLabel(worktree.branch)
+        .accessibilityHint("Double tap to select worktree")
     }
 
     // MARK: - Status Dot
@@ -379,9 +492,9 @@ private struct SupersetWorktreeRow: View {
 
     private var statusColor: Color {
         switch worktree.status {
-        case .idle: return .blue
-        case .activeAgent: return .green
-        case .running: return .orange
+        case .idle: return Color(red: 0.35, green: 0.55, blue: 0.95) // Superset blue
+        case .activeAgent: return Color(red: 0.3, green: 0.85, blue: 0.5) // Superset green
+        case .running: return Color(red: 0.95, green: 0.6, blue: 0.2) // Superset orange
         }
     }
 
@@ -421,4 +534,5 @@ private struct SupersetWorktreeRow: View {
 extension Notification.Name {
     static let workspaceLaunchAgent = Notification.Name("com.ghostty.workspace.launchAgent")
     static let workspaceDeleteWorktree = Notification.Name("com.ghostty.workspace.deleteWorktree")
+    static let workspaceWorktreeNeedsTab = Notification.Name("com.ghostty.workspace.worktreeNeedsTab")
 }

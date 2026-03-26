@@ -79,6 +79,7 @@ struct GitChangesPanel: View {
         }
         .frame(minWidth: 280)
         .background(theme.backgroundC)
+        .accessibilityIdentifier("git-changes-panel")
         .onAppear {
             refreshStatus()
             Task { await statusManager.startWatching(worktreePath: worktreePath) }
@@ -162,6 +163,8 @@ struct GitChangesPanel: View {
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(tab.rawValue)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -284,6 +287,8 @@ struct GitChangesPanel: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(file.fileName)
+        .accessibilityValue(String(describing: file.status))
     }
 
     @ViewBuilder

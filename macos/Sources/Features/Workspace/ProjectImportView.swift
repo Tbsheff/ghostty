@@ -129,6 +129,7 @@ struct ProjectImportView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .accessibilityIdentifier("btn-browse")
             }
         }
     }
@@ -249,6 +250,8 @@ struct ProjectImportView: View {
             }
             .keyboardShortcut(.defaultAction)
             .disabled(selectedPath == nil || detectedWorktrees.isEmpty || isImporting)
+            .accessibilityIdentifier("btn-import")
+            .accessibilityLabel("Import")
         }
         .padding(AdaptiveTheme.spacing16)
     }

@@ -127,6 +127,7 @@ struct CreateWorktreeSheet: View {
                 TextField("feature/my-branch", text: $branchName)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 13, design: .monospaced))
+                    .accessibilityIdentifier("branch-name-field")
 
                 if !branchName.isEmpty && !isValidBranchName {
                     Text("Invalid branch name")
@@ -288,6 +289,8 @@ struct CreateWorktreeSheet: View {
             }
             .keyboardShortcut(.defaultAction)
             .disabled(!isValidBranchName || effectiveBranch.isEmpty || isCreating)
+            .accessibilityIdentifier("btn-create-worktree")
+            .accessibilityLabel("Create")
         }
         .padding(AdaptiveTheme.spacing16)
     }

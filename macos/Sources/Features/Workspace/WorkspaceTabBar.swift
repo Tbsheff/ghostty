@@ -18,19 +18,23 @@ struct WorkspaceTabBar: View {
     @State private var dragOffset: CGFloat = 0
     @State private var selectedAgentSessionIndex: Int = 0
 
+    @Environment(\.adaptiveTheme) private var theme
+
     var body: some View {
         VStack(spacing: 0) {
             // Row 1: Tab pills
             tabPillRow
 
             // 1px divider between rows
-            Color.primary.opacity(0.08)
+            theme.borderSubtleC
                 .frame(height: 1)
 
             // Row 2: Agent session icons
             agentSessionRow
         }
-        .background(Color.primary.opacity(0.03))
+        .background(theme.surfaceHoverC.opacity(0.3))
+        .accessibilityIdentifier("workspace-tab-bar")
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: - Row 1: Tab Pills
@@ -88,12 +92,14 @@ struct WorkspaceTabBar: View {
             Button(action: onNewTab) {
                 Image(systemName: "plus")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.secondary.opacity(0.6))
+                    .foregroundColor(theme.textMutedC)
             }
             .buttonStyle(.plain)
             .frame(width: 22, height: 22)
             .contentShape(Rectangle())
             .padding(.trailing, AdaptiveTheme.spacing4)
+            .accessibilityLabel("New tab")
+            .accessibilityIdentifier("btn-new-tab")
         }
         .frame(height: 32)
     }
@@ -170,7 +176,7 @@ private struct AgentSessionIcon: View {
             VStack(spacing: 2) {
                 Image(systemName: icon)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(isSelected ? color : .secondary.opacity(0.5))
+                    .foregroundColor(isSelected ? color : Color.secondary.opacity(0.5))
                     .frame(width: 24, height: 16)
 
                 // Selection indicator line
@@ -183,6 +189,8 @@ private struct AgentSessionIcon: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .opacity(isHovered && !isSelected ? 0.8 : 1)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier("agent-\(label)")
     }
 }
 
@@ -217,12 +225,12 @@ struct WorkspaceTabItem: View {
                 .font(.system(size: 11.5, weight: isSelected ? .medium : .regular))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .foregroundColor(isSelected ? .primary : .secondary)
+                .foregroundColor(isSelected ? theme.textPrimaryC : theme.textSecondaryC)
 
             // Activity indicator (filled circle when tab has unseen changes)
             if tab.agentName != nil {
                 Circle()
-                    .fill(Color.primary.opacity(0.4))
+                    .fill(theme.textMutedC)
                     .frame(width: 5, height: 5)
             }
 
@@ -247,14 +255,19 @@ struct WorkspaceTabItem: View {
         .scaleEffect(isDragging ? 1.05 : 1)
         .shadow(color: .black.opacity(isDragging ? 0.15 : 0), radius: isDragging ? 4 : 0)
         .animation(.easeOut(duration: 0.15), value: isDragging)
+        .accessibilityIdentifier("tab-\(tab.id)")
+        .accessibilityLabel(tab.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
+
+    @Environment(\.adaptiveTheme) private var theme
 
     @ViewBuilder
     private var tabBackground: some View {
         if isSelected {
-            Color.primary.opacity(0.15)
+            theme.selectionActiveC
         } else if isHovered {
-            Color.primary.opacity(0.07)
+            theme.surfaceHoverC
         } else {
             Color.clear
         }
@@ -275,19 +288,21 @@ struct WorkspaceTabItem: View {
 struct WorkspaceTabCloseButton: View {
     let action: () -> Void
     @State private var isHovered = false
+    @Environment(\.adaptiveTheme) private var theme
 
     var body: some View {
         Button(action: action) {
             Image(systemName: "xmark")
                 .font(.system(size: 8, weight: .semibold))
-                .foregroundColor(isHovered ? .primary : .secondary.opacity(0.6))
+                .foregroundColor(isHovered ? theme.textPrimaryC : theme.textMutedC)
         }
         .buttonStyle(.plain)
         .frame(width: 14, height: 14)
         .background(
             Circle()
-                .fill(Color.primary.opacity(isHovered ? 0.12 : 0))
+                .fill(isHovered ? theme.surfaceHoverC : Color.clear)
         )
         .onHover { isHovered = $0 }
+        .accessibilityLabel("Close tab")
     }
 }

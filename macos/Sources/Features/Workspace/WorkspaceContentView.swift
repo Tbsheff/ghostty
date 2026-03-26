@@ -79,6 +79,7 @@ class WorkspaceContentViewController: NSViewController {
     override func loadView() {
         view = NSView()
         view.wantsLayer = true
+        view.setAccessibilityIdentifier("workspace-content")
     }
 
     override func viewDidLoad() {

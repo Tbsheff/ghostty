@@ -85,6 +85,7 @@ struct QuickSwitcherView: View {
                 .focused($isSearchFocused)
                 .onSubmit { selectCurrent() }
                 .onChange(of: query) { _, _ in selectedIndex = 0 }
+                .accessibilityIdentifier("quick-switcher-search")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -175,6 +176,7 @@ private struct QuickSwitcherRow: View {
         .padding(.vertical, 8)
         .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
         .contentShape(Rectangle())
+        .accessibilityLabel(item.name)
     }
 }
 

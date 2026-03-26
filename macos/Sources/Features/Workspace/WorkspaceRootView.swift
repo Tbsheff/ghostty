@@ -52,6 +52,7 @@ struct WorkspaceRootView: View {
                 ),
                 left: {
                     WorkspaceSidebarView(workspaceState: workspaceState)
+                        .accessibilityIdentifier("sidebar-area")
                 },
                 center: {
                     // Tab bar + active tab content
@@ -62,15 +63,18 @@ struct WorkspaceRootView: View {
                             delegate: delegate
                         )
                     }
+                    .accessibilityIdentifier("content-area")
                 },
                 right: {
                     // Git panel — placeholder for Stream C
                     PanelContainer(identifier: "workspace.gitpanel") {
                         GitPanelPlaceholder()
                     }
+                    .accessibilityIdentifier("git-panel-area")
                 }
             )
             .frame(maxWidth: .greatestFiniteMagnitude, maxHeight: .greatestFiniteMagnitude)
+            .accessibilityIdentifier("workspace-root")
         }
     }
 }

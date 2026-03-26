@@ -82,6 +82,8 @@ struct CommitView: View {
                     .foregroundColor(theme.textPrimaryC)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 48, maxHeight: 100)
+                    .accessibilityIdentifier("commit-message")
+                    .accessibilityLabel("Commit message")
             }
             .background(theme.surfaceElevatedC)
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -123,6 +125,8 @@ struct CommitView: View {
             }
             .buttonStyle(.plain)
             .disabled(!canCommit)
+            .accessibilityIdentifier("btn-commit")
+            .accessibilityLabel("Commit")
 
             // Push / Publish Branch button
             Button(action: performPush) {
@@ -147,6 +151,8 @@ struct CommitView: View {
             }
             .buttonStyle(.plain)
             .disabled(isPushing)
+            .accessibilityIdentifier("btn-push")
+            .accessibilityLabel("Push")
         }
         .padding(.top, AdaptiveTheme.spacing8)
     }
