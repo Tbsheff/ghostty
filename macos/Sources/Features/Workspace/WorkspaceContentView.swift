@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import GhosttyKit
 import Combine
+import Observation
 
 // MARK: - WorkspaceContentView
 
@@ -17,6 +18,10 @@ struct WorkspaceContentView: NSViewControllerRepresentable {
     let workspaceState: WorkspaceState
     let ghostty: Ghostty.App
     weak var delegate: (any TerminalViewDelegate)?
+
+    /// Passed as a stored property so SwiftUI diffs it and calls
+    /// updateNSViewController whenever the active tab changes.
+    var activeTabId: String?
 
     func makeNSViewController(context: Context) -> WorkspaceContentViewController {
         let controller = WorkspaceContentViewController(
@@ -79,7 +84,7 @@ class WorkspaceContentViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // Subscribe to tab changes
+        // Subscribe to tab changes via Combine (explicit signal path)
         workspaceState.activeTabDidChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -87,7 +92,25 @@ class WorkspaceContentViewController: NSViewController {
             }
             .store(in: &cancellables)
 
+        // Also observe via @Observable tracking so any mutation path that
+        // changes the active tab (selectedWorktreeId, tabs array, selectedTabIndex)
+        // triggers a sync — even if activeTabDidChange wasn't explicitly sent.
+        startObservingActiveTab()
+
         syncToActiveTab()
+    }
+
+    /// Uses withObservationTracking to re-sync whenever the derived
+    /// currentTab identity changes, covering paths that Combine misses.
+    private func startObservingActiveTab() {
+        withObservationTracking {
+            _ = workspaceState.currentTab?.id
+        } onChange: { [weak self] in
+            DispatchQueue.main.async {
+                self?.syncToActiveTab()
+                self?.startObservingActiveTab()
+            }
+        }
     }
 
     // MARK: - Tab Switching
