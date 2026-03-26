@@ -240,25 +240,47 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
         splitView.addArrangedSubview(centerContainer)
         splitView.addArrangedSubview(rightContainer)
 
-        // Set holding priorities - center should be most flexible (absorbs extra space)
-        // Side panels resist compression more, keeping their user-set widths stable.
-        splitView.setHoldingPriority(.defaultHigh, forSubviewAt: 0)
-        splitView.setHoldingPriority(.defaultLow, forSubviewAt: 1)
-        splitView.setHoldingPriority(.defaultHigh, forSubviewAt: 2)
+        // Holding priorities: center is most flexible (absorbs remaining space).
+        // Side panels have higher priority to maintain their user-set widths.
+        splitView.setHoldingPriority(.defaultHigh, forSubviewAt: 0)    // left
+        splitView.setHoldingPriority(.defaultLow, forSubviewAt: 1)     // center
+        splitView.setHoldingPriority(.defaultHigh, forSubviewAt: 2)    // right
 
-        // Enforce minimum center width to prevent autosave corruption
-        // from collapsing the center pane to zero.
+        // Enforce minimum center width to prevent the center pane from
+        // being collapsed to zero by corrupted autosave or layout quirks.
         centerContainer.widthAnchor.constraint(greaterThanOrEqualToConstant: minCenterWidth).isActive = true
 
-        // Start hidden until visibility is applied after layout
+        // Side panels start hidden. We DON'T use isHidden here because NSSplitView
+        // has issues with initial layout when subviews start hidden. Instead, we
+        // collapse them to zero width and hide them in the first layout pass.
         leftContainer.isHidden = true
         rightContainer.isHidden = true
     }
 
     override func viewDidLayout() {
         super.viewDidLayout()
-        guard !didInitialLayout else { return }
+
+        // On every layout pass (not just the first), ensure the center pane
+        // has not been squeezed to zero by NSSplitView's auto-distribution.
+        // This handles the case where autosave or holding priorities cause
+        // the side panels to take all available space.
+        if didInitialLayout {
+            // Only enforce on subsequent layout passes
+            enforceCenterMinimumWidth()
+            return
+        }
+
+        // Wait until the split view has non-zero bounds before applying initial visibility.
+        guard splitView.bounds.width > 1 else { return }
         didInitialLayout = true
+        applyVisibility(animated: false)
+    }
+
+    /// If the center container is smaller than the minimum, forcibly reposition dividers.
+    private func enforceCenterMinimumWidth() {
+        guard !isAnimating else { return }
+        let centerWidth = centerContainer.frame.width
+        guard centerWidth < minCenterWidth, splitView.bounds.width > 1 else { return }
         applyVisibility(animated: false)
     }
 
@@ -479,6 +501,9 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
         let leftDivider = min(leftTargetWidth, maxLeftDivider)
 
         let preferredRightDivider = totalWidth - rightTargetWidth
+
+        // Debug: uncomment to trace layout issues
+        // NSLog("NativeSplitView applyVisibility: total=\(totalWidth), leftDiv=\(leftDivider), rightDiv=\(rightDivider)")
         let minRightDivider = leftDivider + minCenterWidth
         let rightDivider = min(max(preferredRightDivider, minRightDivider), totalWidth)
 
