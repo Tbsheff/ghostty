@@ -13,8 +13,8 @@ struct WorkspaceStateTests {
 
     /// Creates a WorkspaceState populated with one repo containing two worktrees.
     @MainActor
-    private func makePopulatedState() -> Ghostty.WorkspaceState {
-        let state = Ghostty.WorkspaceState()
+    private func makePopulatedState() -> WorkspaceState {
+        let state = WorkspaceState()
         let repo = RepoGroup(
             id: "repo-1",
             name: "TestRepo",
@@ -31,7 +31,7 @@ struct WorkspaceStateTests {
     // MARK: - Initial State
 
     @Test @MainActor func initialState_noRepos_isEmpty() {
-        let state = Ghostty.WorkspaceState()
+        let state = WorkspaceState()
         #expect(state.repos.isEmpty)
         #expect(state.selectedWorktreeId == nil)
         #expect(state.currentWorktree == nil)
@@ -40,7 +40,7 @@ struct WorkspaceStateTests {
     // MARK: - Repo Management
 
     @Test @MainActor func addRepo_appearsInRepos() {
-        let state = Ghostty.WorkspaceState()
+        let state = WorkspaceState()
         let repo = RepoGroup(id: "r1", name: "MyRepo", repoPath: "/tmp/my-repo")
         state.repos.append(repo)
         #expect(state.repos.count == 1)
@@ -85,12 +85,12 @@ struct WorkspaceStateTests {
     @Test @MainActor func sidebarVisible_defaultsTrue() {
         // Clear any existing UserDefaults key to test default behavior
         UserDefaults.standard.removeObject(forKey: "ghostty.workspaceSidebarVisible")
-        let state = Ghostty.WorkspaceState()
+        let state = WorkspaceState()
         #expect(state.sidebarVisible == true)
     }
 
     @Test @MainActor func toggleSidebar_togglesVisibility() {
-        let state = Ghostty.WorkspaceState()
+        let state = WorkspaceState()
         let initial = state.sidebarVisible
         state.toggleSidebar()
         #expect(state.sidebarVisible == !initial)

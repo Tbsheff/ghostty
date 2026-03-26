@@ -17,14 +17,14 @@ struct WorkspaceStoreTests {
         config.prepareDatabase { db in
             try db.execute(sql: "PRAGMA foreign_keys = ON")
         }
-        let dbPool = try DatabasePool(path: ":memory:", configuration: config)
+        let dbQueue = try DatabaseQueue(configuration: config)
 
         // Apply migrations
         var migrator = DatabaseMigrator()
         Migration001_InitialSchema.register(in: &migrator)
-        try migrator.migrate(dbPool)
+        try migrator.migrate(dbQueue)
 
-        return WorkspaceStore(dbPool: dbPool)
+        return WorkspaceStore(dbPool: dbQueue)
     }
 
     // MARK: - Projects

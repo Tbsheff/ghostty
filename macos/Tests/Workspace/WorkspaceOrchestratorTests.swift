@@ -12,19 +12,19 @@ struct WorkspaceOrchestratorTests {
     // MARK: - Helpers
 
     /// Creates an in-memory store with schema applied.
-    private func makeStore() throws -> (WorkspaceStore, DatabasePool) {
+    private func makeStore() throws -> (WorkspaceStore, DatabaseQueue) {
         var config = Configuration()
         config.prepareDatabase { db in
             try db.execute(sql: "PRAGMA foreign_keys = ON")
         }
-        let dbPool = try DatabasePool(path: ":memory:", configuration: config)
+        let dbQueue = try DatabaseQueue(configuration: config)
 
         var migrator = DatabaseMigrator()
         Migration001_InitialSchema.register(in: &migrator)
-        try migrator.migrate(dbPool)
+        try migrator.migrate(dbQueue)
 
-        let store = WorkspaceStore(dbPool: dbPool)
-        return (store, dbPool)
+        let store = WorkspaceStore(dbPool: dbQueue)
+        return (store, dbQueue)
     }
 
     /// Creates a temp directory with an initialized git repo and one empty commit.
