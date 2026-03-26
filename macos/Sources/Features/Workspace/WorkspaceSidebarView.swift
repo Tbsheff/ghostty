@@ -143,6 +143,7 @@ struct WorkspaceSidebarView: View {
         .onHover { newWorkspaceHovered = $0 }
         .animation(.linear(duration: AdaptiveTheme.animationFast), value: newWorkspaceHovered)
         .accessibilityLabel("New Workspace")
+        .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("btn-new-workspace")
     }
 
@@ -308,6 +309,7 @@ struct WorkspaceSidebarView: View {
         .onHover { addRepoHovered = $0 }
         .animation(.linear(duration: AdaptiveTheme.animationFast), value: addRepoHovered)
         .accessibilityLabel("Add repository")
+        .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("btn-add-repository")
     }
 
@@ -479,7 +481,8 @@ private struct SupersetWorktreeRow: View {
         .animation(.linear(duration: AdaptiveTheme.animationFast), value: isSelected)
         .accessibilityIdentifier("worktree-\(worktree.branch)")
         .accessibilityLabel(worktree.branch)
-        .accessibilityHint("Double tap to select worktree")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Double tap to select worktree. Right-click for context menu.")
     }
 
     // MARK: - Status Dot

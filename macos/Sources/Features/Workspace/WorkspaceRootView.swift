@@ -50,6 +50,7 @@ struct WorkspaceRootView: View {
                     get: { max(minGitPanelWidth, min(maxGitPanelWidth, CGFloat(gitPanelWidth))) },
                     set: { gitPanelWidth = Double(max(minGitPanelWidth, min(maxGitPanelWidth, $0))) }
                 ),
+                autosaveName: "GhosttyWorkspaceSplit",
                 left: {
                     WorkspaceSidebarView(workspaceState: workspaceState)
                         .accessibilityIdentifier("sidebar-area")

@@ -26,6 +26,11 @@ struct NativeSplitView<Left: View, Center: View, Right: View>: NSViewControllerR
     let rightMinWidth: CGFloat
     let rightMaxWidthRatio: CGFloat  // As percentage of total width
 
+    // MARK: - Autosave
+    /// Optional unique autosave name for divider positions.
+    /// Each NativeSplitView instance should use a different name to avoid state corruption.
+    let splitAutosaveName: String?
+
     // MARK: - NSViewControllerRepresentable
 
     func makeNSViewController(context: Context) -> NativeSplitViewController {
@@ -37,6 +42,7 @@ struct NativeSplitView<Left: View, Center: View, Right: View>: NSViewControllerR
         controller.leftMaxWidth = leftMaxWidth
         controller.rightMinWidth = rightMinWidth
         controller.rightMaxWidthRatio = rightMaxWidthRatio
+        controller.autosaveName = splitAutosaveName
 
         // Initial widths
         controller.leftWidth = leftWidth
@@ -181,11 +187,17 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
         setupSplitView()
     }
 
+    /// Optional unique autosave name for divider positions. Each instance should use
+    /// a different name to avoid state corruption between different split views.
+    var autosaveName: String? = nil
+
     private func setupSplitView() {
         splitView.isVertical = true  // Horizontal layout (left | center | right)
         splitView.dividerStyle = .thin
         splitView.delegate = self
-        splitView.autosaveName = "GhosttyPanelSplit"
+        if let autosaveName {
+            splitView.autosaveName = NSSplitView.AutosaveName(autosaveName)
+        }
 
         // Add to view hierarchy
         splitView.translatesAutoresizingMaskIntoConstraints = false
@@ -648,6 +660,7 @@ extension NativeSplitView {
         rightVisible: Binding<Bool>,
         leftWidth: Binding<CGFloat>,
         rightWidth: Binding<CGFloat>,
+        autosaveName: String? = nil,
         @ViewBuilder left: () -> Left,
         @ViewBuilder center: () -> Center,
         @ViewBuilder right: () -> Right
@@ -663,5 +676,6 @@ extension NativeSplitView {
         self.leftMaxWidth = 400
         self.rightMinWidth = 280
         self.rightMaxWidthRatio = 0.5
+        self.splitAutosaveName = autosaveName
     }
 }
