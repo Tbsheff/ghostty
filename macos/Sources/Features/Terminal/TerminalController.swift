@@ -1522,20 +1522,24 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             focusedSurface: focusedSurface
         )
 
-        // Detect current working directory for the default worktree
-        let cwd = FileManager.default.currentDirectoryPath
-        let branch = Self.detectGitBranch(at: cwd) ?? URL(fileURLWithPath: cwd).lastPathComponent
+        // Detect current working directory for the default worktree.
+        // Use home directory as fallback when cwd is "/" (e.g., launched from Dock).
+        let rawCwd = FileManager.default.currentDirectoryPath
+        let cwd = (rawCwd == "/" ? NSHomeDirectory() : rawCwd)
+        let cwdURL = URL(fileURLWithPath: cwd)
+        let dirName = cwdURL.lastPathComponent
+        let branch = Self.detectGitBranch(at: cwd) ?? dirName
 
         let worktree = WorktreeState(
             branch: branch,
             worktreePath: cwd,
             tabs: [tab],
-            selectedTabIndex: 0
+            selectedTabIndex: 0,
+            displayName: dirName
         )
 
-        let repoName = URL(fileURLWithPath: cwd).lastPathComponent
         let defaultRepo = RepoGroup(
-            name: repoName.isEmpty ? "Terminal" : repoName,
+            name: dirName.isEmpty ? "Terminal" : dirName,
             repoPath: "",
             worktrees: [worktree]
         )

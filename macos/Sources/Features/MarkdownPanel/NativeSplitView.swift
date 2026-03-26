@@ -195,6 +195,11 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
         splitView.isVertical = true  // Horizontal layout (left | center | right)
         splitView.dividerStyle = .thin
         splitView.delegate = self
+
+        // Clear legacy shared autosave name that caused state corruption
+        // between different NativeSplitView instances (workspace vs panel).
+        UserDefaults.standard.removeObject(forKey: "NSSplitView Subview Frames GhosttyPanelSplit")
+
         if let autosaveName {
             splitView.autosaveName = NSSplitView.AutosaveName(autosaveName)
         }
@@ -235,10 +240,15 @@ class NativeSplitViewController: NSViewController, NSSplitViewDelegate {
         splitView.addArrangedSubview(centerContainer)
         splitView.addArrangedSubview(rightContainer)
 
-        // Set holding priorities - center should be most flexible
+        // Set holding priorities - center should be most flexible (absorbs extra space)
+        // Side panels resist compression more, keeping their user-set widths stable.
         splitView.setHoldingPriority(.defaultHigh, forSubviewAt: 0)
         splitView.setHoldingPriority(.defaultLow, forSubviewAt: 1)
         splitView.setHoldingPriority(.defaultHigh, forSubviewAt: 2)
+
+        // Enforce minimum center width to prevent autosave corruption
+        // from collapsing the center pane to zero.
+        centerContainer.widthAnchor.constraint(greaterThanOrEqualToConstant: minCenterWidth).isActive = true
 
         // Start hidden until visibility is applied after layout
         leftContainer.isHidden = true
