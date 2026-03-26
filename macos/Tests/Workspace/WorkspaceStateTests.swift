@@ -200,4 +200,121 @@ struct WorkspaceStateTests {
         let repo = RepoGroup(name: "ghostty", repoPath: "/tmp/ghostty")
         #expect(repo.avatarLetter == "G")
     }
+
+    // MARK: - Tab Behavior (WorkspaceTabBar / WorkspaceContentView)
+
+    @Test @MainActor func testAddTab_appendsToWorktree() {
+        let state = makePopulatedState()
+        state.repos[0].worktrees[0].tabs = [WorktreeTab(id: "existing")]
+        state.selectWorktree("wt-main")
+
+        state.addTab(WorktreeTab(id: "new1"))
+        state.addTab(WorktreeTab(id: "new2"))
+
+        #expect(state.currentWorktree?.tabs.count == 3)
+        #expect(state.currentWorktree?.tabs.last?.id == "new2")
+    }
+
+    @Test @MainActor func testRemoveTab_removesFromWorktree() {
+        let state = makePopulatedState()
+        state.repos[0].worktrees[0].tabs = [
+            WorktreeTab(id: "a"),
+            WorktreeTab(id: "b"),
+            WorktreeTab(id: "c"),
+        ]
+        state.selectWorktree("wt-main")
+
+        state.removeTab(at: 1) // remove "b"
+        let ids = state.currentWorktree?.tabs.map(\.id)
+        #expect(ids == ["a", "c"])
+    }
+
+    @Test @MainActor func testRemoveLastTab_leavesEmptyWorktree() {
+        let state = makePopulatedState()
+        state.repos[0].worktrees[0].tabs = [WorktreeTab(id: "only")]
+        state.selectWorktree("wt-main")
+
+        state.removeTab(at: 0)
+        #expect(state.currentWorktree?.tabs.isEmpty == true)
+        #expect(state.currentWorktree?.selectedTabIndex == 0)
+    }
+
+    @Test @MainActor func testSelectTab_updatesSelectedIndex() {
+        let state = makePopulatedState()
+        state.repos[0].worktrees[0].tabs = [
+            WorktreeTab(id: "a"),
+            WorktreeTab(id: "b"),
+            WorktreeTab(id: "c"),
+        ]
+        state.selectWorktree("wt-main")
+
+        state.selectTab(at: 2)
+        #expect(state.currentWorktree?.selectedTabIndex == 2)
+        #expect(state.currentTab?.id == "c")
+    }
+
+    @Test @MainActor func testMoveTab_reordersCorrectly() {
+        let state = makePopulatedState()
+        state.repos[0].worktrees[0].tabs = [
+            WorktreeTab(id: "a"),
+            WorktreeTab(id: "b"),
+            WorktreeTab(id: "c"),
+            WorktreeTab(id: "d"),
+        ]
+        state.selectWorktree("wt-main")
+
+        state.moveTab(from: 3, to: 1) // move "d" to index 1
+        let ids = state.currentWorktree?.tabs.map(\.id)
+        #expect(ids == ["a", "d", "b", "c"])
+        #expect(state.currentWorktree?.selectedTabIndex == 1)
+    }
+
+    @Test @MainActor func testRemoveTab_adjustsSelectedIndex() {
+        let state = makePopulatedState()
+        state.repos[0].worktrees[0].tabs = [
+            WorktreeTab(id: "a"),
+            WorktreeTab(id: "b"),
+            WorktreeTab(id: "c"),
+        ]
+        state.selectWorktree("wt-main")
+        state.selectTab(at: 2) // select "c"
+
+        state.removeTab(at: 2) // remove "c"
+        // Should adjust to last valid index
+        #expect(state.currentWorktree?.selectedTabIndex == 1)
+    }
+
+    @Test @MainActor func testRemoveRepo_clearsSelection() {
+        let state = makePopulatedState()
+        state.repos[0].worktrees[0].tabs = [WorktreeTab(id: "t")]
+        state.selectWorktree("wt-main")
+        #expect(state.selectedWorktreeId == "wt-main")
+
+        let repo = state.repos[0]
+        state.removeRepo(repo)
+
+        #expect(state.repos.isEmpty)
+        #expect(state.selectedWorktreeId == nil)
+    }
+
+    @Test @MainActor func testRemoveWorktree_selectsAnother() {
+        let state = makePopulatedState()
+        state.repos[0].worktrees[0].tabs = [WorktreeTab(id: "t1")]
+        state.repos[0].worktrees[1].tabs = [WorktreeTab(id: "t2")]
+        state.selectWorktree("wt-main")
+
+        state.removeWorktree("wt-main", from: "repo-1")
+
+        // Should auto-select the remaining worktree
+        #expect(state.selectedWorktreeId == "wt-feature")
+    }
+
+    // MARK: - Git Panel Visibility
+
+    @Test @MainActor func testToggleGitPanel_togglesVisibility() {
+        let state = WorkspaceState()
+        let initial = state.gitPanelVisible
+        state.toggleGitPanel()
+        #expect(state.gitPanelVisible == !initial)
+    }
 }

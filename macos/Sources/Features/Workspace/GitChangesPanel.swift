@@ -87,7 +87,7 @@ struct GitChangesPanel: View {
             refreshTask?.cancel()
             Task { await statusManager.stopWatching(worktreePath: worktreePath) }
         }
-        .onChange(of: worktreePath) { _ in
+        .onChange(of: worktreePath) { _, _ in
             selectedFile = nil
             refreshStatus()
         }

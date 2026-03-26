@@ -121,6 +121,9 @@ class WorkspaceContentViewController: NSViewController {
     /// old tab's view from the NSView hierarchy (stopping Metal rendering)
     /// and add only the new active tab's view.
     func syncToActiveTab() {
+        // Clean up views for tabs that no longer exist
+        cleanupOrphanedViews()
+
         guard let tab = workspaceState.currentTab else {
             // No active tab — remove current view
             removeActiveView()

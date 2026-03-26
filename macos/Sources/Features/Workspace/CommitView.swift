@@ -48,7 +48,7 @@ struct CommitView: View {
         .padding(AdaptiveTheme.spacing12)
         .background(theme.surfaceElevatedC)
         .onAppear { checkBranchInfo() }
-        .onChange(of: worktreePath) { _ in checkBranchInfo() }
+        .onChange(of: worktreePath) { _, _ in checkBranchInfo() }
     }
 
     // MARK: - Commit Editor

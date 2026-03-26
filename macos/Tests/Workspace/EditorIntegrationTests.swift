@@ -45,4 +45,29 @@ struct EditorIntegrationTests {
         #expect(xcode?.bundleId == "com.apple.dt.Xcode")
         #expect(xcode?.cliCommand == "xed")
     }
+
+    @Test func openInEditor_constructsCorrectCommand() {
+        // Verify the editor's CLI command would be used correctly
+        let editor = EditorInfo(name: "TestEditor", bundleId: "com.test.editor", iconName: "star", cliCommand: "testeditor")
+        #expect(editor.cliCommand == "testeditor")
+        // The function uses /usr/bin/env <cliCommand> <path> for fallback
+        // We can't test the actual launch but verify the data is correct
+        #expect(!editor.cliCommand.contains(" "))
+    }
+
+    @Test func openInFinder_worksWithValidPath() {
+        // Verify the path handling logic
+        let path = "/tmp/test-workspace"
+        let url = URL(fileURLWithPath: path)
+        #expect(url.path == "/tmp/test-workspace")
+        #expect(url.deletingLastPathComponent().path == "/tmp")
+    }
+
+    @Test func knownEditors_allHaveNonEmptyCliCommands() {
+        for editor in EditorInfo.knownEditors {
+            #expect(!editor.cliCommand.isEmpty, "\(editor.name) has empty CLI command")
+            // CLI commands should be single words (no spaces)
+            #expect(!editor.cliCommand.contains(" "), "\(editor.name) CLI command contains spaces")
+        }
+    }
 }

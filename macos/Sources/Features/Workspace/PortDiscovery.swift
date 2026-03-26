@@ -148,34 +148,38 @@ actor PortDiscovery {
 
     // MARK: - lsof Parsing
 
-    private struct LsofEntry {
+    struct LsofEntry {
         let processName: String
         let pid: Int32
         let port: UInt16
     }
 
     private func runLsof() async -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
-        process.arguments = ["-iTCP", "-sTCP:LISTEN", "-P", "-n"]
+        await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+            process.arguments = ["-iTCP", "-sTCP:LISTEN", "-P", "-n"]
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = FileHandle.nullDevice
 
-        do {
-            try process.run()
-            process.waitUntilExit()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            return String(data: data, encoding: .utf8)
-        } catch {
-            return nil
+            process.terminationHandler = { _ in
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                continuation.resume(returning: String(data: data, encoding: .utf8))
+            }
+
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(returning: nil)
+            }
         }
     }
 
     /// Parses lsof output lines like:
     /// `node    12345 user   20u  IPv4 0x...  0t0  TCP *:3000 (LISTEN)`
-    private func parseLsofOutput(_ output: String) -> [LsofEntry] {
+    func parseLsofOutput(_ output: String) -> [LsofEntry] {
         output.components(separatedBy: "\n").compactMap { line in
             let fields = line.split(separator: " ", omittingEmptySubsequences: true)
             guard fields.count >= 9 else { return nil }
@@ -199,23 +203,28 @@ actor PortDiscovery {
     private func buildParentChains(for pids: Set<Int32>) async -> [Int32: [Int32]] {
         guard !pids.isEmpty else { return [:] }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-eo", "pid,ppid"]
+        let output: String? = await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/ps")
+            process.arguments = ["-eo", "pid,ppid"]
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = FileHandle.nullDevice
 
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            return [:]
+            process.terminationHandler = { _ in
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                continuation.resume(returning: String(data: data, encoding: .utf8))
+            }
+
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(returning: nil)
+            }
         }
 
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        guard let output = String(data: data, encoding: .utf8) else { return [:] }
+        guard let output else { return [:] }
 
         // Parse pid -> ppid mapping
         var ppidMap: [Int32: Int32] = [:]

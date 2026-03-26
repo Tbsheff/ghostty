@@ -182,7 +182,7 @@ private struct QuickSwitcherRow: View {
 
 /// Simple fuzzy match: checks if all query characters appear in order in the target.
 /// Returns a score (higher = better) or nil if no match.
-private func fuzzyScore(query: String, target: String) -> Int? {
+func fuzzyScore(query: String, target: String) -> Int? {
     guard !query.isEmpty else { return 0 }
 
     var score = 0
