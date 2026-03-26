@@ -36,7 +36,7 @@ final class WorktreeTab: Identifiable {
         if let markdownPanelState {
             self.markdownPanelState = markdownPanelState
         } else {
-            self.markdownPanelState = MainActor.assumeIsolated { MarkdownPanelState() }
+            self.markdownPanelState = MainActor.assumeIsolated { MarkdownPanelState(fileBrowserDefaultHidden: true) }
         }
         self.focusedSurface = focusedSurface
         self.tabColor = tabColor
@@ -198,8 +198,14 @@ final class WorkspaceState {
     }
 
     init() {
-        self.sidebarVisible = UserDefaults.standard.bool(forKey: "ghostty.workspaceSidebarVisible")
-        self.gitPanelVisible = UserDefaults.standard.bool(forKey: "ghostty.gitPanelVisible")
+        // Default sidebar to visible for first-time users (UserDefaults.bool returns false when key missing)
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "ghostty.workspaceSidebarVisible") != nil {
+            self.sidebarVisible = defaults.bool(forKey: "ghostty.workspaceSidebarVisible")
+        } else {
+            self.sidebarVisible = true
+        }
+        self.gitPanelVisible = defaults.bool(forKey: "ghostty.gitPanelVisible")
     }
 
     // MARK: - Selection

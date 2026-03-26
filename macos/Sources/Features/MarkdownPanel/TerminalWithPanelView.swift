@@ -52,9 +52,14 @@ class MarkdownPanelState: ObservableObject {
     /// Generation counter to prevent stale Task completions from writing state
     private var loadGeneration: Int = 0
 
-    init() {
+    init(fileBrowserDefaultHidden: Bool = false) {
         let defaults = UserDefaults.standard
-        self.fileBrowserVisible = defaults.bool(forKey: Self.fileBrowserVisibleKey)
+        if fileBrowserDefaultHidden {
+            // In workspace mode, the workspace sidebar replaces the file browser
+            self.fileBrowserVisible = false
+        } else {
+            self.fileBrowserVisible = defaults.bool(forKey: Self.fileBrowserVisibleKey)
+        }
         self.markdownVisible = defaults.bool(forKey: Self.markdownVisibleKey)
     }
 
